@@ -698,7 +698,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@ethersproject/providers@npm:^5.7.0":
+"@ethersproject/providers@npm:^5.7.0, @ethersproject/providers@npm:^5.7.2":
   version: 5.7.2
   resolution: "@ethersproject/providers@npm:5.7.2"
   dependencies:
@@ -1346,7 +1346,7 @@ __metadata:
     "@metamask/base-controller": ^3.2.3
     "@metamask/eth-snap-keyring": ^2.0.0
     "@metamask/keyring-api": ^1.1.0
-    "@metamask/keyring-controller": ^8.1.0
+    "@metamask/keyring-controller": ^9.0.0
     "@metamask/snaps-controllers": ^3.2.0
     "@metamask/snaps-utils": ^3.2.0
     "@metamask/utils": ^8.2.0
@@ -1362,7 +1362,7 @@ __metadata:
     typescript: ~4.8.4
     uuid: ^8.3.2
   peerDependencies:
-    "@metamask/keyring-controller": ^8.1.0
+    "@metamask/keyring-controller": ^9.0.0
   languageName: unknown
   linkType: soft
 
@@ -1403,7 +1403,6 @@ __metadata:
     "@metamask/base-controller": ^3.2.3
     "@types/jest": ^27.4.1
     deepmerge: ^4.2.2
-    immer: ^9.0.6
     jest: ^27.5.1
     ts-jest: ^27.1.4
     typedoc: ^0.24.8
@@ -1422,7 +1421,6 @@ __metadata:
     "@metamask/utils": ^8.2.0
     "@types/jest": ^27.4.1
     deepmerge: ^4.2.2
-    immer: ^9.0.6
     jest: ^27.5.1
     nanoid: ^3.1.31
     sinon: ^9.2.4
@@ -1449,8 +1447,8 @@ __metadata:
     "@metamask/controller-utils": ^5.0.2
     "@metamask/eth-query": ^4.0.0
     "@metamask/metamask-eth-abis": 3.0.0
-    "@metamask/network-controller": ^15.2.0
-    "@metamask/polling-controller": ^1.0.1
+    "@metamask/network-controller": ^16.0.0
+    "@metamask/polling-controller": ^1.0.2
     "@metamask/preferences-controller": ^4.4.3
     "@metamask/rpc-errors": ^6.1.0
     "@metamask/utils": ^8.2.0
@@ -1461,7 +1459,6 @@ __metadata:
     deepmerge: ^4.2.2
     ethereumjs-util: ^7.0.10
     ethjs-provider-http: ^0.1.6
-    immer: ^9.0.6
     jest: ^27.5.1
     jest-environment-jsdom: ^27.5.1
     multiformats: ^9.5.2
@@ -1475,7 +1472,7 @@ __metadata:
     uuid: ^8.3.2
   peerDependencies:
     "@metamask/approval-controller": ^4.1.0
-    "@metamask/network-controller": ^15.2.0
+    "@metamask/network-controller": ^16.0.0
     "@metamask/preferences-controller": ^4.4.3
   languageName: unknown
   linkType: soft
@@ -1514,7 +1511,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@metamask/browser-passworder@npm:^4.1.0":
+"@metamask/browser-passworder@npm:^4.2.0":
   version: 4.2.0
   resolution: "@metamask/browser-passworder@npm:4.2.0"
   dependencies:
@@ -1639,7 +1636,7 @@ __metadata:
     "@metamask/auto-changelog": ^3.4.3
     "@metamask/base-controller": ^3.2.3
     "@metamask/controller-utils": ^5.0.2
-    "@metamask/network-controller": ^15.2.0
+    "@metamask/network-controller": ^16.0.0
     "@metamask/utils": ^8.2.0
     "@types/jest": ^27.4.1
     deepmerge: ^4.2.2
@@ -1651,7 +1648,7 @@ __metadata:
     typedoc-plugin-missing-exports: ^2.0.0
     typescript: ~4.8.4
   peerDependencies:
-    "@metamask/network-controller": ^15.2.0
+    "@metamask/network-controller": ^16.0.0
   languageName: unknown
   linkType: soft
 
@@ -1766,18 +1763,18 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@metamask/eth-keyring-controller@npm:^14.0.0":
-  version: 14.0.0
-  resolution: "@metamask/eth-keyring-controller@npm:14.0.0"
+"@metamask/eth-keyring-controller@npm:^15.0.0":
+  version: 15.0.0
+  resolution: "@metamask/eth-keyring-controller@npm:15.0.0"
   dependencies:
     "@ethereumjs/tx": ^4.2.0
-    "@metamask/browser-passworder": ^4.1.0
+    "@metamask/browser-passworder": ^4.2.0
     "@metamask/eth-hd-keyring": ^7.0.1
     "@metamask/eth-sig-util": ^7.0.0
-    "@metamask/eth-simple-keyring": ^6.0.0
+    "@metamask/eth-simple-keyring": ^6.0.1
     "@metamask/obs-store": ^8.1.0
-    "@metamask/utils": ^8.1.0
-  checksum: 56337a2e129b7def7255a4099a574b837371db0151856451cbb40a17a0ef381d965d8afc38d48b6d8f3293c2643c9fe22340a155055b27e959de33932dd9f19d
+    "@metamask/utils": ^8.2.0
+  checksum: b878c47f58b06833584e933d4886be17c20766398e007d221bd252badf58ded8012ee41922116e9e8962ec3de00722d85a9e361f4d066c9c7d727a715c6831f7
   languageName: node
   linkType: hard
 
@@ -1806,7 +1803,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@metamask/eth-simple-keyring@npm:^6.0.0":
+"@metamask/eth-simple-keyring@npm:^6.0.1":
   version: 6.0.1
   resolution: "@metamask/eth-simple-keyring@npm:6.0.1"
   dependencies:
@@ -1835,7 +1832,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@metamask/gas-fee-controller@^10.0.0, @metamask/gas-fee-controller@workspace:packages/gas-fee-controller":
+"@metamask/gas-fee-controller@^10.0.1, @metamask/gas-fee-controller@workspace:packages/gas-fee-controller":
   version: 0.0.0-use.local
   resolution: "@metamask/gas-fee-controller@workspace:packages/gas-fee-controller"
   dependencies:
@@ -1843,8 +1840,8 @@ __metadata:
     "@metamask/base-controller": ^3.2.3
     "@metamask/controller-utils": ^5.0.2
     "@metamask/eth-query": ^4.0.0
-    "@metamask/network-controller": ^15.2.0
-    "@metamask/polling-controller": ^1.0.1
+    "@metamask/network-controller": ^16.0.0
+    "@metamask/polling-controller": ^1.0.2
     "@metamask/utils": ^8.2.0
     "@types/jest": ^27.4.1
     "@types/jest-when": ^2.7.3
@@ -1852,7 +1849,6 @@ __metadata:
     deepmerge: ^4.2.2
     ethereumjs-util: ^7.0.10
     ethjs-unit: ^0.1.6
-    immer: ^9.0.6
     jest: ^27.5.1
     jest-when: ^3.4.2
     nock: ^13.3.1
@@ -1863,7 +1859,7 @@ __metadata:
     typescript: ~4.8.4
     uuid: ^8.3.2
   peerDependencies:
-    "@metamask/network-controller": ^15.2.0
+    "@metamask/network-controller": ^16.0.0
   languageName: unknown
   linkType: soft
 
@@ -1939,7 +1935,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@metamask/keyring-controller@^8.1.0, @metamask/keyring-controller@workspace:packages/keyring-controller":
+"@metamask/keyring-controller@^9.0.0, @metamask/keyring-controller@workspace:packages/keyring-controller":
   version: 0.0.0-use.local
   resolution: "@metamask/keyring-controller@workspace:packages/keyring-controller"
   dependencies:
@@ -1949,7 +1945,7 @@ __metadata:
     "@keystonehq/metamask-airgapped-keyring": ^0.13.1
     "@metamask/auto-changelog": ^3.4.3
     "@metamask/base-controller": ^3.2.3
-    "@metamask/eth-keyring-controller": ^14.0.0
+    "@metamask/eth-keyring-controller": ^15.0.0
     "@metamask/eth-sig-util": ^7.0.0
     "@metamask/message-manager": ^7.3.5
     "@metamask/preferences-controller": ^4.4.3
@@ -2032,7 +2028,6 @@ __metadata:
     "@types/jest": ^27.4.1
     async-mutex: ^0.2.6
     deepmerge: ^4.2.2
-    immer: ^9.0.6
     jest: ^27.5.1
     ts-jest: ^27.1.4
     typedoc: ^0.24.8
@@ -2041,7 +2036,7 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@metamask/network-controller@^15.2.0, @metamask/network-controller@workspace:packages/network-controller":
+"@metamask/network-controller@^16.0.0, @metamask/network-controller@workspace:packages/network-controller":
   version: 0.0.0-use.local
   resolution: "@metamask/network-controller@workspace:packages/network-controller"
   dependencies:
@@ -2086,7 +2081,6 @@ __metadata:
     "@metamask/utils": ^8.2.0
     "@types/jest": ^27.4.1
     deepmerge: ^4.2.2
-    immer: ^9.0.6
     jest: ^27.5.1
     nanoid: ^3.1.31
     ts-jest: ^27.1.4
@@ -2198,14 +2192,14 @@ __metadata:
   languageName: unknown
   linkType: soft
 
-"@metamask/polling-controller@^1.0.1, @metamask/polling-controller@workspace:packages/polling-controller":
+"@metamask/polling-controller@^1.0.2, @metamask/polling-controller@workspace:packages/polling-controller":
   version: 0.0.0-use.local
   resolution: "@metamask/polling-controller@workspace:packages/polling-controller"
   dependencies:
     "@metamask/auto-changelog": ^3.4.3
     "@metamask/base-controller": ^3.2.3
     "@metamask/controller-utils": ^5.0.2
-    "@metamask/network-controller": ^15.2.0
+    "@metamask/network-controller": ^16.0.0
     "@metamask/utils": ^8.2.0
     "@types/jest": ^27.4.1
     "@types/uuid": ^8.3.0
@@ -2219,7 +2213,7 @@ __metadata:
     typescript: ~4.8.4
     uuid: ^8.3.2
   peerDependencies:
-    "@metamask/network-controller": ^15.2.0
+    "@metamask/network-controller": ^16.0.0
   languageName: unknown
   linkType: soft
 
@@ -2278,9 +2272,9 @@ __metadata:
     "@metamask/base-controller": ^3.2.3
     "@metamask/controller-utils": ^5.0.2
     "@metamask/json-rpc-engine": ^7.3.0
-    "@metamask/network-controller": ^15.2.0
+    "@metamask/network-controller": ^16.0.0
     "@metamask/rpc-errors": ^6.1.0
-    "@metamask/selected-network-controller": ^3.1.1
+    "@metamask/selected-network-controller": ^3.1.2
     "@metamask/swappable-obj-proxy": ^2.1.0
     "@metamask/utils": ^8.2.0
     "@types/jest": ^27.4.1
@@ -2295,8 +2289,8 @@ __metadata:
     typedoc-plugin-missing-exports: ^2.0.0
     typescript: ~4.8.4
   peerDependencies:
-    "@metamask/network-controller": ^15.2.0
-    "@metamask/selected-network-controller": ^3.1.1
+    "@metamask/network-controller": ^16.0.0
+    "@metamask/selected-network-controller": ^3.1.2
   languageName: unknown
   linkType: soft
 
@@ -2309,7 +2303,6 @@ __metadata:
     "@metamask/rpc-errors": ^6.1.0
     "@types/jest": ^27.4.1
     deepmerge: ^4.2.2
-    immer: ^9.0.6
     jest: ^27.5.1
     ts-jest: ^27.1.4
     typedoc: ^0.24.8
@@ -2352,14 +2345,14 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@metamask/selected-network-controller@^3.1.1, @metamask/selected-network-controller@workspace:packages/selected-network-controller":
+"@metamask/selected-network-controller@^3.1.2, @metamask/selected-network-controller@workspace:packages/selected-network-controller":
   version: 0.0.0-use.local
   resolution: "@metamask/selected-network-controller@workspace:packages/selected-network-controller"
   dependencies:
     "@metamask/auto-changelog": ^3.4.3
     "@metamask/base-controller": ^3.2.3
     "@metamask/json-rpc-engine": ^7.3.0
-    "@metamask/network-controller": ^15.2.0
+    "@metamask/network-controller": ^16.0.0
     "@metamask/swappable-obj-proxy": ^2.1.0
     "@types/jest": ^27.4.1
     deepmerge: ^4.2.2
@@ -2373,7 +2366,7 @@ __metadata:
     typedoc-plugin-missing-exports: ^2.0.0
     typescript: ~4.8.4
   peerDependencies:
-    "@metamask/network-controller": ^15.2.0
+    "@metamask/network-controller": ^16.0.0
   languageName: unknown
   linkType: soft
 
@@ -2385,7 +2378,7 @@ __metadata:
     "@metamask/auto-changelog": ^3.4.3
     "@metamask/base-controller": ^3.2.3
     "@metamask/controller-utils": ^5.0.2
-    "@metamask/keyring-controller": ^8.1.0
+    "@metamask/keyring-controller": ^9.0.0
     "@metamask/logging-controller": ^1.0.4
     "@metamask/message-manager": ^7.3.5
     "@metamask/rpc-errors": ^6.1.0
@@ -2393,7 +2386,6 @@ __metadata:
     "@types/jest": ^27.4.1
     deepmerge: ^4.2.2
     ethereumjs-util: ^7.0.10
-    immer: ^9.0.6
     jest: ^27.5.1
     lodash: ^4.17.21
     ts-jest: ^27.1.4
@@ -2402,6 +2394,7 @@ __metadata:
     typescript: ~4.8.4
   peerDependencies:
     "@metamask/approval-controller": ^4.1.0
+    "@metamask/keyring-controller": ^9.0.0
     "@metamask/logging-controller": ^1.0.4
   languageName: unknown
   linkType: soft
@@ -2527,9 +2520,9 @@ __metadata:
     "@metamask/base-controller": ^3.2.3
     "@metamask/controller-utils": ^5.0.2
     "@metamask/eth-query": ^4.0.0
-    "@metamask/gas-fee-controller": ^10.0.0
+    "@metamask/gas-fee-controller": ^10.0.1
     "@metamask/metamask-eth-abis": ^3.0.0
-    "@metamask/network-controller": ^15.2.0
+    "@metamask/network-controller": ^16.0.0
     "@metamask/rpc-errors": ^6.1.0
     "@metamask/utils": ^8.2.0
     "@types/jest": ^27.4.1
@@ -2543,7 +2536,7 @@ __metadata:
     fast-json-patch: ^3.1.1
     jest: ^27.5.1
     lodash: ^4.17.21
-    nonce-tracker: ^1.1.0
+    nonce-tracker: ^3.0.0
     sinon: ^9.2.4
     ts-jest: ^27.1.4
     typedoc: ^0.24.8
@@ -2552,8 +2545,8 @@ __metadata:
     uuid: ^8.3.2
   peerDependencies:
     "@metamask/approval-controller": ^4.1.0
-    "@metamask/gas-fee-controller": ^10.0.0
-    "@metamask/network-controller": ^15.2.0
+    "@metamask/gas-fee-controller": ^10.0.1
+    "@metamask/network-controller": ^16.0.0
     babel-runtime: ^6.26.0
   languageName: unknown
   linkType: soft
@@ -3684,16 +3677,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"assert@npm:^1.4.1":
-  version: 1.5.0
-  resolution: "assert@npm:1.5.0"
-  dependencies:
-    object-assign: ^4.1.1
-    util: 0.10.3
-  checksum: 9be48435f726029ae7020c5888a3566bf4d617687aab280827f2e4029644b6515a9519ea10d018b342147c02faf73d9e9419e780e8937b3786ee4945a0ca71e5
-  languageName: node
-  linkType: hard
-
 "assert@npm:^2.0.0":
   version: 2.0.0
   resolution: "assert@npm:2.0.0"
@@ -3715,6 +3698,15 @@ __metadata:
   languageName: node
   linkType: hard
 
+"async-mutex@npm:^0.3.1":
+  version: 0.3.2
+  resolution: "async-mutex@npm:0.3.2"
+  dependencies:
+    tslib: ^2.3.1
+  checksum: 620b771dfdea1cad0a6b712915c31a1e3ca880a8cf1eae92b4590f435995e0260929c6ebaae0b9126b1456790ea498064b5bb9a506948cda760f48d3d0dcc4c8
+  languageName: node
+  linkType: hard
+
 "asynckit@npm:^0.4.0":
   version: 0.4.0
   resolution: "asynckit@npm:0.4.0"
@@ -3726,13 +3718,6 @@ __metadata:
   version: 1.0.5
   resolution: "available-typed-arrays@npm:1.0.5"
   checksum: 20eb47b3cefd7db027b9bbb993c658abd36d4edd3fe1060e83699a03ee275b0c9b216cc076ff3f2db29073225fb70e7613987af14269ac1fe2a19803ccc97f1a
-  languageName: node
-  linkType: hard
-
-"await-semaphore@npm:^0.1.3":
-  version: 0.1.3
-  resolution: "await-semaphore@npm:0.1.3"
-  checksum: 334c86541e446378dd832168de431327a77146f70cd80b57c99cd483ce5996e3bfdadea9d795e36f0b4faacb5121f5f7a99d94297ac2bdafbc690e5b0aa5cc32
   languageName: node
   linkType: hard
 
@@ -5554,18 +5539,6 @@ __metadata:
   languageName: node
   linkType: hard
 
-"ethjs-query@npm:^0.3.8":
-  version: 0.3.8
-  resolution: "ethjs-query@npm:0.3.8"
-  dependencies:
-    babel-runtime: ^6.26.0
-    ethjs-format: 0.2.7
-    ethjs-rpc: 0.2.0
-    promise-to-callback: ^1.0.0
-  checksum: 6673167101e793dfdbb212f3ee2e7449a7c1eb7f4d72aba04a1c504eb36d9148f18c42a702839ebce7534709d821f32adcca84c56b7900788b2875cba8a371f1
-  languageName: node
-  linkType: hard
-
 "ethjs-rpc@npm:0.2.0":
   version: 0.2.0
   resolution: "ethjs-rpc@npm:0.2.0"
@@ -6547,13 +6520,6 @@ __metadata:
   version: 2.0.4
   resolution: "inherits@npm:2.0.4"
   checksum: 4a48a733847879d6cf6691860a6b1e3f0f4754176e4d71494c41f3475553768b10f84b5ce1d40fbd0e34e6bfbb864ee35858ad4dd2cf31e02fc4a154b724d7f1
-  languageName: node
-  linkType: hard
-
-"inherits@npm:2.0.1":
-  version: 2.0.1
-  resolution: "inherits@npm:2.0.1"
-  checksum: 6536b9377296d4ce8ee89c5c543cb75030934e61af42dba98a428e7d026938c5985ea4d1e3b87743a5b834f40ed1187f89c2d7479e9d59e41d2d1051aefba07b
   languageName: node
   linkType: hard
 
@@ -8435,14 +8401,13 @@ __metadata:
   languageName: node
   linkType: hard
 
-"nonce-tracker@npm:^1.1.0":
-  version: 1.1.0
-  resolution: "nonce-tracker@npm:1.1.0"
+"nonce-tracker@npm:^3.0.0":
+  version: 3.0.0
+  resolution: "nonce-tracker@npm:3.0.0"
   dependencies:
-    assert: ^1.4.1
-    await-semaphore: ^0.1.3
-    ethjs-query: ^0.3.8
-  checksum: fbed4eac51a5df3922a9ee93f2d40f700d3c86e03ac02acc5c7983e9fd5c9d97278f1f5d8422f2dad0f0108c09a2d880145906cae19604717cc898d385bbdff9
+    "@ethersproject/providers": ^5.7.2
+    async-mutex: ^0.3.1
+  checksum: f679e83359c3d0b1941cb8569057445b5430b7e5645216442c256b2061ffb08ebee07e15011d3d55acf75710e054abd924c1b1bb38847956ef9f3bb7eed622d4
   languageName: node
   linkType: hard
 
@@ -8515,13 +8480,6 @@ __metadata:
   version: 2.2.7
   resolution: "nwsapi@npm:2.2.7"
   checksum: cab25f7983acec7e23490fec3ef7be608041b460504229770e3bfcf9977c41d6fe58f518994d3bd9aa3a101f501089a3d4a63536f4ff8ae4b8c4ca23bdbfda4e
-  languageName: node
-  linkType: hard
-
-"object-assign@npm:^4.1.1":
-  version: 4.1.1
-  resolution: "object-assign@npm:4.1.1"
-  checksum: fcc6e4ea8c7fe48abfbb552578b1c53e0d194086e2e6bbbf59e0a536381a292f39943c6e9628af05b5528aa5e3318bb30d6b2e53cadaf5b8fe9e12c4b69af23f
   languageName: node
   linkType: hard
 
@@ -10170,10 +10128,10 @@ __metadata:
   languageName: node
   linkType: hard
 
-"tslib@npm:^2.0.0, tslib@npm:^2.3.0, tslib@npm:^2.5.0, tslib@npm:^2.6.0":
-  version: 2.6.0
-  resolution: "tslib@npm:2.6.0"
-  checksum: c01066038f950016a18106ddeca4649b4d76caa76ec5a31e2a26e10586a59fceb4ee45e96719bf6c715648e7c14085a81fee5c62f7e9ebee68e77a5396e5538f
+"tslib@npm:^2.0.0, tslib@npm:^2.3.0, tslib@npm:^2.3.1, tslib@npm:^2.5.0, tslib@npm:^2.6.0":
+  version: 2.6.2
+  resolution: "tslib@npm:2.6.2"
+  checksum: 329ea56123005922f39642318e3d1f0f8265d1e7fcb92c633e0809521da75eeaca28d2cf96d7248229deb40e5c19adf408259f4b9640afd20d13aecc1430f3ad
   languageName: node
   linkType: hard
 
@@ -10428,15 +10386,6 @@ __metadata:
   version: 1.0.2
   resolution: "util-deprecate@npm:1.0.2"
   checksum: 474acf1146cb2701fe3b074892217553dfcf9a031280919ba1b8d651a068c9b15d863b7303cb15bd00a862b498e6cf4ad7b4a08fb134edd5a6f7641681cb54a2
-  languageName: node
-  linkType: hard
-
-"util@npm:0.10.3":
-  version: 0.10.3
-  resolution: "util@npm:0.10.3"
-  dependencies:
-    inherits: 2.0.1
-  checksum: bd800f5d237a82caddb61723a6cbe45297d25dd258651a31335a4d5d981fd033cb4771f82db3d5d59b582b187cb69cfe727dc6f4d8d7826f686ee6c07ce611e0
   languageName: node
   linkType: hard
 
