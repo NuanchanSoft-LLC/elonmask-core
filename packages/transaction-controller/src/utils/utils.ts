@@ -1,14 +1,18 @@
 import { convertHexToDecimal } from '@metamask/controller-utils';
 import { getKnownPropertyNames } from '@metamask/utils';
 import { addHexPrefix, isHexString } from 'ethereumjs-util';
-import type { Transaction as NonceTrackerTransaction } from 'nonce-tracker/dist/NonceTracker';
+import type { Transaction as NonceTrackerTransaction } from 'nonce-tracker';
 
 import type {
   GasPriceValue,
   FeeMarketEIP1559Values,
 } from '../TransactionController';
 import { TransactionStatus } from '../types';
-import type { TransactionParams, TransactionMeta } from '../types';
+import type {
+  TransactionParams,
+  TransactionMeta,
+  TransactionError,
+} from '../types';
 
 export const ESTIMATE_GAS_ERROR = 'eth_estimateGas rpc method error';
 
@@ -162,8 +166,26 @@ export function validateIfTransactionUnapproved(
 ) {
   if (transactionMeta?.status !== TransactionStatus.unapproved) {
     throw new Error(
-      `Can only call ${fnName} on an unapproved transaction.
+      `TransactionsController: Can only call ${fnName} on an unapproved transaction.
       Current tx status: ${transactionMeta?.status}`,
     );
   }
+}
+
+/**
+ * Normalizes properties on transaction params.
+ *
+ * @param error - The error to be normalize.
+ * @returns Normalized transaction error.
+ */
+export function normalizeTxError(
+  error: Error & { code?: string; value?: unknown },
+): TransactionError {
+  return {
+    name: error.name,
+    message: error.message,
+    stack: error.stack,
+    code: error?.code,
+    rpc: error?.value,
+  };
 }

@@ -2,7 +2,7 @@
 
 import { query } from '@metamask/controller-utils';
 import type { BlockTracker } from '@metamask/network-controller';
-import type NonceTracker from 'nonce-tracker';
+import type { NonceTracker } from 'nonce-tracker';
 
 import { TransactionStatus } from '../types';
 import { PendingTransactionTracker } from './PendingTransactionTracker';
@@ -228,6 +228,30 @@ describe('PendingTransactionTracker', () => {
               'We had an error while submitting this transaction, please try again.',
             ),
           );
+        });
+
+        it('if no hash because beforeCheckPendingTransaction hook returns false', async () => {
+          const listener = jest.fn();
+
+          const transactionMetaMock = {
+            ...TRANSACTION_SUBMITTED_MOCK,
+            hash: undefined,
+          };
+
+          const tracker = new PendingTransactionTracker({
+            ...options,
+            getTransactions: () => [transactionMetaMock],
+            hooks: {
+              beforeCheckPendingTransaction: () => false,
+              beforePublish: () => false,
+            },
+          } as any);
+
+          tracker.hub.addListener('transaction-failed', listener);
+
+          await onLatestBlock();
+
+          expect(listener).toHaveBeenCalledTimes(0);
         });
 
         it('if receipt has error status', async () => {
@@ -463,6 +487,40 @@ describe('PendingTransactionTracker', () => {
             },
             'PendingTransactionTracker:transaction-retry - Retry count increased',
           );
+        });
+
+        it('if beforePublish returns false, does not resubmit the transaction', async () => {
+          const listener = jest.fn();
+          const transaction = {
+            ...TRANSACTION_SUBMITTED_MOCK,
+          };
+
+          const tracker = new PendingTransactionTracker({
+            ...options,
+            getTransactions: () => [transaction],
+            hooks: {
+              beforeCheckPendingTransaction: () => false,
+              beforePublish: () => false,
+            },
+          } as any);
+
+          tracker.hub.addListener('transaction-updated', listener);
+
+          queryMock.mockResolvedValueOnce(undefined);
+          queryMock.mockResolvedValueOnce('0x1');
+
+          await onLatestBlock(BLOCK_NUMBER_MOCK);
+          await onLatestBlock('0x124');
+
+          expect(listener).toHaveBeenCalledTimes(1);
+          expect(listener).toHaveBeenCalledWith(
+            {
+              ...TRANSACTION_SUBMITTED_MOCK,
+              firstRetryBlockNumber: BLOCK_NUMBER_MOCK,
+            },
+            'PendingTransactionTracker:#isResubmitDue - First retry block number set',
+          );
+          expect(options.publishTransaction).toHaveBeenCalledTimes(0);
         });
 
         it('if publishing fails', async () => {

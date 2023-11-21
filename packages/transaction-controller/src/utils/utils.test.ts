@@ -1,4 +1,4 @@
-import type { Transaction as NonceTrackerTransaction } from 'nonce-tracker/dist/NonceTracker';
+import type { Transaction as NonceTrackerTransaction } from 'nonce-tracker';
 
 import type {
   GasPriceValue,
@@ -237,6 +237,39 @@ describe('utils', () => {
         inputTransactions,
       );
       expect(result).toStrictEqual(expectedResult);
+    });
+  });
+
+  describe('normalizeTxError', () => {
+    const errorBase = {
+      name: 'TxError',
+      message: 'An error occurred',
+      stack: 'Error stack trace',
+    };
+    it('returns the error object with no code and rpc properties', () => {
+      const normalizedError = util.normalizeTxError(errorBase);
+
+      expect(normalizedError).toStrictEqual({
+        ...errorBase,
+        code: undefined,
+        rpc: undefined,
+      });
+    });
+
+    it('returns the error object with code and rpc properties', () => {
+      const error = {
+        ...errorBase,
+        code: 'ERROR_CODE',
+        value: { code: 'rpc data' },
+      };
+
+      const normalizedError = util.normalizeTxError(error);
+
+      expect(normalizedError).toStrictEqual({
+        ...errorBase,
+        code: 'ERROR_CODE',
+        rpc: { code: 'rpc data' },
+      });
     });
   });
 });
