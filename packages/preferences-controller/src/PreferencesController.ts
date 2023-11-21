@@ -1,4 +1,9 @@
-import type { BaseConfig, BaseState } from '@metamask/base-controller';
+import type {
+  BaseConfig,
+  BaseState,
+  ControllerGetStateAction,
+  ControllerStateChangeEvent,
+} from '@metamask/base-controller';
 import { BaseController } from '@metamask/base-controller';
 import { toChecksumHexAddress } from '@metamask/controller-utils';
 
@@ -26,6 +31,8 @@ export type EtherscanSupportedChains =
 export type EtherscanSupportedHexChainId =
   (typeof ETHERSCAN_SUPPORTED_CHAIN_IDS)[EtherscanSupportedChains];
 
+const controllerName = 'PreferencesController';
+
 /**
  * @type PreferencesState
  *
@@ -35,29 +42,41 @@ export type EtherscanSupportedHexChainId =
  * @property lostIdentities - Map of lost addresses to ContactEntry objects
  * @property selectedAddress - Current coinbase account
  */
-// This interface was created before this ESLint rule was added.
-// Convert to a `type` in a future major version.
-// eslint-disable-next-line @typescript-eslint/consistent-type-definitions
-export interface PreferencesState extends BaseState {
-  featureFlags: { [feature: string]: boolean };
-  ipfsGateway: string;
-  identities: { [address: string]: ContactEntry };
-  lostIdentities: { [address: string]: ContactEntry };
-  selectedAddress: string;
-  useTokenDetection: boolean;
-  useNftDetection: boolean;
-  openSeaEnabled: boolean;
-  securityAlertsEnabled: boolean;
-  isMultiAccountBalancesEnabled: boolean;
-  disabledRpcMethodPreferences: {
-    [methodName: string]: boolean;
+export type PreferencesState = BaseState &
+  Record<string, unknown> & {
+    featureFlags: { [feature: string]: boolean };
+    ipfsGateway: string;
+    identities: { [address: string]: ContactEntry };
+    lostIdentities: { [address: string]: ContactEntry };
+    selectedAddress: string;
+    useTokenDetection: boolean;
+    useNftDetection: boolean;
+    openSeaEnabled: boolean;
+    securityAlertsEnabled: boolean;
+    isMultiAccountBalancesEnabled: boolean;
+    disabledRpcMethodPreferences: {
+      [methodName: string]: boolean;
+    };
+    showTestNetworks: boolean;
+    isIpfsGatewayEnabled: boolean;
+    showIncomingTransactions: {
+      [chainId in EtherscanSupportedHexChainId]: boolean;
+    };
   };
-  showTestNetworks: boolean;
-  isIpfsGatewayEnabled: boolean;
-  showIncomingTransactions: {
-    [chainId in EtherscanSupportedHexChainId]: boolean;
-  };
-}
+
+export type PreferencesControllerGetStateAction = ControllerGetStateAction<
+  typeof controllerName,
+  PreferencesState
+>;
+
+export type PreferenceControllerActions = PreferencesControllerGetStateAction;
+
+export type PreferencesControllerStateChangeEvent = ControllerStateChangeEvent<
+  typeof controllerName,
+  PreferencesState
+>;
+
+export type PreferenceControllerEvents = PreferencesControllerStateChangeEvent;
 
 /**
  * Controller that stores shared settings and exposes convenience methods

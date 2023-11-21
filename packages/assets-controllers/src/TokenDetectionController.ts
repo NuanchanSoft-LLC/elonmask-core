@@ -1,27 +1,46 @@
-import type { BaseConfig, BaseState } from '@metamask/base-controller';
+import type {
+  BaseState,
+  ControllerGetStateAction,
+  ControllerStateChangeEvent,
+  RestrictedControllerMessenger,
+} from '@metamask/base-controller';
 import {
   safelyExecute,
   toChecksumHexAddress,
 } from '@metamask/controller-utils';
 import type {
+  KeyringControllerLockEvent,
+  KeyringControllerUnlockEvent,
+} from '@metamask/keyring-controller';
+import type {
   NetworkClientId,
   NetworkController,
+  NetworkControllerGetNetworkClientByIdAction,
+  NetworkControllerGetStateAction,
+  NetworkControllerStateChangeEvent,
   NetworkState,
 } from '@metamask/network-controller';
-import { PollingControllerV1 } from '@metamask/polling-controller';
-import type { PreferencesState } from '@metamask/preferences-controller';
-import type { Hex } from '@metamask/utils';
+import { PollingController } from '@metamask/polling-controller';
+import type {
+  PreferencesControllerGetStateAction,
+  PreferencesControllerStateChangeEvent,
+  PreferencesState,
+} from '@metamask/preferences-controller';
+import type { Hex, Json } from '@metamask/utils';
 
 import type { AssetsContractController } from './AssetsContractController';
 import { isTokenDetectionSupportedForNetwork } from './assetsUtil';
-import type { TokenListState } from './TokenListController';
+import type {
+  TokenListControllerGetStateAction,
+  TokenListState,
+} from './TokenListController';
 import type { Token } from './TokenRatesController';
 import type { TokensController, TokensState } from './TokensController';
 
 const DEFAULT_INTERVAL = 180000;
 
 /**
- * @type TokenDetectionConfig
+ * @type TokenDetectionState
  *
  * TokenDetection configuration
  * @property interval - Polling interval used to fetch new token rates
@@ -30,30 +49,67 @@ const DEFAULT_INTERVAL = 180000;
  * @property isDetectionEnabledFromPreferences - Boolean to track if detection is enabled from PreferencesController
  * @property isDetectionEnabledForNetwork - Boolean to track if detected is enabled for current network
  */
-// This interface was created before this ESLint rule was added.
-// Convert to a `type` in a future major version.
-// eslint-disable-next-line @typescript-eslint/consistent-type-definitions
-export interface TokenDetectionConfig extends BaseConfig {
-  interval: number;
-  selectedAddress: string;
-  chainId: Hex;
-  isDetectionEnabledFromPreferences: boolean;
-  isDetectionEnabledForNetwork: boolean;
-}
+export type TokenDetectionState = BaseState &
+  Record<string, Json> & {
+    interval: number;
+    selectedAddress: string;
+    chainId: Hex;
+    isDetectionEnabledFromPreferences: boolean;
+    isDetectionEnabledForNetwork: boolean;
+  };
+
+const controllerName = 'TokenDetectionController';
+
+export type TokenDetectionControllerGetStateAction = ControllerGetStateAction<
+  typeof controllerName,
+  TokenDetectionState
+>;
+
+export type TokenDetectionControllerActions =
+  TokenDetectionControllerGetStateAction;
+
+type AllowedActions =
+  | AssetsContractControllerGetBalancesInSingleCallAction
+  | NetworkControllerGetStateAction
+  | NetworkControllerGetNetworkClientByIdAction
+  | TokensControllerAddDetectedTokensAction
+  | TokenListControllerGetStateAction
+  | TokenListControllerGetStateAction
+  | PreferencesControllerGetStateAction;
+
+export type TokenDetectionControllerStateChangeEvent =
+  ControllerStateChangeEvent<typeof controllerName, TokenDetectionState>;
+
+export type TokenDetectionControllerEvents =
+  TokenDetectionControllerStateChangeEvent;
+
+type AllowedEvents =
+  | NetworkControllerStateChangeEvent
+  | PreferencesControllerStateChangeEvent
+  | KeyringControllerLockEvent
+  | KeyringControllerUnlockEvent;
+
+export type TokenDetectionControllerMessenger = RestrictedControllerMessenger<
+  typeof controllerName,
+  TokenDetectionControllerActions | AllowedActions,
+  TokenDetectionControllerEvents | AllowedEvents,
+  AllowedActions['type'],
+  AllowedEvents['type']
+>;
 
 /**
  * Controller that passively polls on a set interval for Tokens auto detection
  */
-export class TokenDetectionController extends PollingControllerV1<
-  TokenDetectionConfig,
-  BaseState
+export class TokenDetectionController extends PollingController<
+  typeof controllerName,
+  TokenDetectionState,
+  TokenDetectionControllerMessenger
 > {
   private intervalId?: ReturnType<typeof setTimeout>;
 
   /**
    * Name of this controller used during composition
    */
-  override name = 'TokenDetectionController';
 
   private readonly getBalancesInSingleCall: AssetsContractController['getBalancesInSingleCall'];
 
@@ -106,13 +162,9 @@ export class TokenDetectionController extends PollingControllerV1<
       ) => void;
       getBalancesInSingleCall: AssetsContractController['getBalancesInSingleCall'];
       addDetectedTokens: TokensController['addDetectedTokens'];
-      getTokenListState: () => TokenListState;
-      getTokensState: () => TokensState;
-      getNetworkState: () => NetworkState;
-      getPreferencesState: () => PreferencesState;
       getNetworkClientById: NetworkController['getNetworkClientById'];
     },
-    config?: Partial<TokenDetectionConfig>,
+    config?: Partial<TokenDetectionState>,
     state?: Partial<BaseState>,
   ) {
     const {
@@ -341,6 +393,83 @@ export class TokenDetectionController extends PollingControllerV1<
         }
       });
     }
+  }
+
+  /**
+   * Restart token detection polling period and call detectNewTokens
+   * in case of address change or user session initialization.
+   *
+   * @param options
+   * @param options.selectedAddress - the selectedAddress against which to detect for token balances
+   * @param options.chainId - the chainId against which to detect for token balances
+   */
+  restartTokenDetection({ selectedAddress, chainId } = {}) {
+    const addressAgainstWhichToDetect = selectedAddress ?? this.selectedAddress;
+    const chainIdAgainstWhichToDetect = chainId ?? this.chainId;
+    if (!(this.isActive && addressAgainstWhichToDetect)) {
+      return;
+    }
+    this.detectNewTokens({
+      selectedAddress: addressAgainstWhichToDetect,
+      chainId: chainIdAgainstWhichToDetect,
+    });
+    this.interval = DEFAULT_INTERVAL;
+  }
+
+  getChainIdFromNetworkStore() {
+    return this.network?.state.providerConfig.chainId;
+  }
+
+  /* eslint-disable accessor-pairs */
+  /**
+   * @type {number}
+   */
+  set interval(interval) {
+    this._handle && clearInterval(this._handle);
+    if (!interval) {
+      return;
+    }
+    this._handle = setInterval(() => {
+      this.detectNewTokens();
+    }, interval);
+  }
+
+  /**
+   * @type {object}
+   */
+  set tokenList(tokenList) {
+    if (!tokenList) {
+      return;
+    }
+    this._tokenList = tokenList;
+  }
+
+  /**
+   * Internal isActive state
+   *
+   * @type {object}
+   */
+  get isActive() {
+    return this.isOpen && this.isUnlocked;
+  }
+  /* eslint-enable accessor-pairs */
+
+  /**
+   * Constructor helper to register listeners on the keyring
+   * locked state changes
+   */
+  #registerKeyringHandlers() {
+    const { isUnlocked } = this.messenger.call('KeyringController:getState');
+    this.isUnlocked = isUnlocked;
+
+    this.messenger.subscribe('KeyringController:unlock', () => {
+      this.isUnlocked = true;
+      this.restartTokenDetection();
+    });
+
+    this.messenger.subscribe('KeyringController:lock', () => {
+      this.isUnlocked = false;
+    });
   }
 }
 

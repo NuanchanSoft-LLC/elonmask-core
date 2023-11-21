@@ -1474,6 +1474,7 @@ __metadata:
     "@metamask/controller-utils": ^5.0.2
     "@metamask/eth-query": ^4.0.0
     "@metamask/ethjs-provider-http": ^0.2.0
+    "@metamask/keyring-controller": 9.0.0
     "@metamask/metamask-eth-abis": 3.0.0
     "@metamask/network-controller": ^16.0.0
     "@metamask/polling-controller": ^1.0.2
@@ -1499,7 +1500,11 @@ __metadata:
     uuid: ^8.3.2
   peerDependencies:
     "@metamask/approval-controller": ^4.1.0
+    "@metamask/base-controller": ^3.2.3
+    "@metamask/controller-utils": ^5.0.2
+    "@metamask/keyring-controller": 9.0.0
     "@metamask/network-controller": ^16.0.0
+    "@metamask/polling-controller": ^1.0.2
     "@metamask/preferences-controller": ^4.4.3
   languageName: unknown
   linkType: soft
@@ -1984,7 +1989,7 @@ __metadata:
   languageName: node
   linkType: hard
 
-"@metamask/keyring-controller@^9.0.0, @metamask/keyring-controller@workspace:packages/keyring-controller":
+"@metamask/keyring-controller@9.0.0, @metamask/keyring-controller@^9.0.0, @metamask/keyring-controller@workspace:packages/keyring-controller":
   version: 0.0.0-use.local
   resolution: "@metamask/keyring-controller@workspace:packages/keyring-controller"
   dependencies:

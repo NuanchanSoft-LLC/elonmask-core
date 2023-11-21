@@ -4,6 +4,8 @@ import type { AddApprovalRequest } from '@metamask/approval-controller';
 import type {
   BaseConfig,
   BaseState,
+  ControllerGetStateAction,
+  ControllerStateChangeEvent,
   RestrictedControllerMessenger,
 } from '@metamask/base-controller';
 import { BaseController } from '@metamask/base-controller';
@@ -88,35 +90,47 @@ type SuggestedAssetMeta = {
  * @property allIgnoredTokens - Object containing hidden/ignored tokens by network and account
  * @property allDetectedTokens - Object containing tokens detected with non-zero balances
  */
-// This interface was created before this ESLint rule was added.
-// Convert to a `type` in a future major version.
-// eslint-disable-next-line @typescript-eslint/consistent-type-definitions
-export interface TokensState extends BaseState {
-  tokens: Token[];
-  ignoredTokens: string[];
-  detectedTokens: Token[];
-  allTokens: { [chainId: Hex]: { [key: string]: Token[] } };
-  allIgnoredTokens: { [chainId: Hex]: { [key: string]: string[] } };
-  allDetectedTokens: { [chainId: Hex]: { [key: string]: Token[] } };
-}
+export type TokensState = BaseState &
+  Record<string, unknown> & {
+    tokens: Token[];
+    ignoredTokens: string[];
+    detectedTokens: Token[];
+    allTokens: { [chainId: Hex]: { [key: string]: Token[] } };
+    allIgnoredTokens: { [chainId: Hex]: { [key: string]: string[] } };
+    allDetectedTokens: { [chainId: Hex]: { [key: string]: Token[] } };
+  };
 
 /**
  * The name of the {@link TokensController}.
  */
 const controllerName = 'TokensController';
 
+export type TokensControllerGetStateAction = ControllerGetStateAction<
+  typeof controllerName,
+  TokensState
+>;
+
+export type TokensControllerActions = TokensControllerGetStateAction;
+
 /**
  * The external actions available to the {@link TokensController}.
  */
 type AllowedActions = AddApprovalRequest;
+
+export type TokensControllerStateChangeEvent = ControllerStateChangeEvent<
+  typeof controllerName,
+  TokensState
+>;
+
+export type TokensControllerEvents = TokensControllerStateChangeEvent;
 
 /**
  * The messenger of the {@link TokensController}.
  */
 export type TokensControllerMessenger = RestrictedControllerMessenger<
   typeof controllerName,
-  AllowedActions,
-  never,
+  TokensControllerActions | AllowedActions,
+  TokensControllerEvents,
   AllowedActions['type'],
   never
 >;

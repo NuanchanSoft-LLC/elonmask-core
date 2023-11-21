@@ -52,19 +52,19 @@ export type TokenListState = {
   preventPollingOnNetworkRestart: boolean;
 };
 
-export type TokenListStateChange = ControllerStateChangeEvent<
+export type TokenListControllerStateChangeEvent = ControllerStateChangeEvent<
   typeof name,
   TokenListState
 >;
 
-export type TokenListControllerEvents = TokenListStateChange;
+export type TokenListControllerEvents = TokenListControllerStateChangeEvent;
 
-export type GetTokenListState = ControllerGetStateAction<
+export type TokenListControllerGetStateAction = ControllerGetStateAction<
   typeof name,
   TokenListState
 >;
 
-export type TokenListControllerActions = GetTokenListState;
+export type TokenListControllerActions = TokenListControllerGetStateAction;
 
 type AllowedActions = NetworkControllerGetNetworkClientByIdAction;
 
