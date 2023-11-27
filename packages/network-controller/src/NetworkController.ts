@@ -246,8 +246,8 @@ export const defaultState: NetworkState = {
   networkId: null,
   networkStatus: NetworkStatus.Unknown,
   providerConfig: {
-    type: NetworkType.mainnet,
-    chainId: NetworksChainId.mainnet,
+    type: NetworkType['elonchain-mainnet'],
+    chainId: NetworksChainId['elonchain-mainnet'],
   },
   networkDetails: {
     EIPS: {

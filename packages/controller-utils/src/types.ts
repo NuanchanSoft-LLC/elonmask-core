@@ -5,6 +5,7 @@ export const InfuraNetworkType = {
   mainnet: 'mainnet',
   goerli: 'goerli',
   sepolia: 'sepolia',
+  'elonchain-mainnet': 'elonchain-mainnet',
 } as const;
 
 export type InfuraNetworkType =
@@ -36,6 +37,7 @@ export enum NetworksChainId {
   sepolia = '11155111',
   aurora = '1313161554',
   rpc = '',
+  'elonchain-mainnet' = '7107',
 }
 
 export enum NetworkId {
@@ -49,6 +51,7 @@ export enum NetworksTicker {
   goerli = 'GoerliETH',
   sepolia = 'SepoliaETH',
   rpc = '',
+  'elonchain-mainnet' = 'EMC',
 }
 
 export type Json =
