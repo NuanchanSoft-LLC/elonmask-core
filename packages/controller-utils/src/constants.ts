@@ -77,13 +77,6 @@ export const BUILT_IN_NETWORKS = {
     blockExplorerUrl: undefined,
     rpcPrefs: undefined,
   },
-  [NetworkType['elonchain-mainnet']]: {
-    chainId: NetworksChainId['elonchain-mainnet'],
-    ticker: NetworksTicker['elonchain-mainnet'],
-    rpcPrefs: {
-      blockExplorerUrl: 'https://scan.eloncoin.org',
-    },
-  },
 } as const;
 
 // APIs
