@@ -1,17 +1,16 @@
-import type { Json } from '@metamask/utils';
+import { Json } from '@metamask/types';
 import { hasProperty } from '@metamask/utils';
-
 import {
   CaveatSpecificationMismatchError,
   UnrecognizedCaveatTypeError,
 } from './errors';
-import type {
+import {
   AsyncRestrictedMethod,
   RestrictedMethod,
   PermissionConstraint,
   RestrictedMethodParameters,
+  PermissionType,
 } from './Permission';
-import { PermissionType } from './Permission';
 // eslint-disable-next-line @typescript-eslint/no-unused-vars
 import type { PermissionController } from './PermissionController';
 

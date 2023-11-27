@@ -1,5 +1,4 @@
 import { ParsedMessage } from '@spruceid/siwe-parser';
-
 import { detectSIWE, isValidSIWEOrigin } from './siwe';
 
 const mockedParsedMessage = {

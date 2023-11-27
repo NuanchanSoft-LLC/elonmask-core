@@ -1,7 +1,6 @@
 import { Web3Provider } from '@ethersproject/providers';
-import HttpProvider from '@metamask/ethjs-provider-http';
+import HttpProvider from 'ethjs-provider-http';
 import nock from 'nock';
-
 import { ERC20Standard } from './ERC20Standard';
 
 const MAINNET_PROVIDER_HTTP = new HttpProvider(
@@ -22,6 +21,11 @@ describe('ERC20Standard', () => {
       chainId: 1,
     });
     erc20Standard = new ERC20Standard(MAINNET_PROVIDER);
+    nock.disableNetConnect();
+  });
+
+  afterAll(() => {
+    nock.enableNetConnect();
   });
 
   it('should get correct token symbol for a given ERC20 contract address', async () => {
@@ -71,7 +75,7 @@ describe('ERC20Standard', () => {
     const maticDecimals = await erc20Standard.getTokenDecimals(
       ERC20_MATIC_ADDRESS,
     );
-    expect(maticDecimals.toString()).toBe('18');
+    expect(maticDecimals.toString()).toStrictEqual('18');
   });
 
   it('should support non-standard ERC20 symbols and decimals', async () => {

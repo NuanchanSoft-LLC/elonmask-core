@@ -125,13 +125,13 @@ describe('EncryptionPublicKeyManager', () => {
       messageParams,
       originalRequest,
     );
-    expect(messageId).toBeDefined();
+    expect(messageId).not.toBeUndefined();
     const message = controller.getMessage(messageId);
     if (!message) {
       throw new Error('"message" is falsy');
     }
     expect(message.messageParams.from).toBe(messageParams.from);
-    expect(message.time).toBeDefined();
+    expect(message.time).not.toBeUndefined();
     expect(message.status).toBe(messageStatus);
     expect(message.type).toBe(messageType);
   });
@@ -164,7 +164,7 @@ describe('EncryptionPublicKeyManager', () => {
     };
     await controller.addMessage(firstMessage);
     await controller.addMessage(secondMessage);
-    expect(controller.getUnapprovedMessagesCount()).toBe(2);
+    expect(controller.getUnapprovedMessagesCount()).toStrictEqual(2);
     expect(controller.getUnapprovedMessages()).toStrictEqual({
       [firstMessage.id]: firstMessage,
       [secondMessage.id]: secondMessage,
@@ -184,7 +184,7 @@ describe('EncryptionPublicKeyManager', () => {
     if (!message) {
       throw new Error('"message" is falsy');
     }
-    expect(message.status).toBe('approved');
+    expect(message.status).toStrictEqual('approved');
   });
 
   it('sets message status received', async () => {
@@ -197,7 +197,7 @@ describe('EncryptionPublicKeyManager', () => {
       throw new Error('"message" is falsy');
     }
     expect(message.rawSig).toStrictEqual(rawSigMock);
-    expect(message.status).toBe('received');
+    expect(message.status).toStrictEqual('received');
   });
 
   it('rejects message', async () => {
@@ -208,6 +208,6 @@ describe('EncryptionPublicKeyManager', () => {
     if (!message) {
       throw new Error('"message" is falsy');
     }
-    expect(message.status).toBe('rejected');
+    expect(message.status).toStrictEqual('rejected');
   });
 });

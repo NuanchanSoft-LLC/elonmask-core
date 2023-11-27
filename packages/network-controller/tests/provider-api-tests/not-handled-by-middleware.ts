@@ -1,7 +1,9 @@
 import { fill } from 'lodash';
-
-import type { ProviderType } from './helpers';
-import { withMockedCommunications, withNetworkClient } from './helpers';
+import {
+  ProviderType,
+  withMockedCommunications,
+  withNetworkClient,
+} from './helpers';
 
 type TestsForRpcMethodNotHandledByMiddlewareOptions = {
   providerType: ProviderType;

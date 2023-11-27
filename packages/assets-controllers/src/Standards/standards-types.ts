@@ -1,8 +1,4 @@
-import type {
-  abiERC20,
-  abiERC1155,
-  abiERC721,
-} from '@metamask/metamask-eth-abis';
+import { abiERC20, abiERC1155, abiERC721 } from '@metamask/metamask-eth-abis';
 
 type Contract = {
   at(address: string): any;

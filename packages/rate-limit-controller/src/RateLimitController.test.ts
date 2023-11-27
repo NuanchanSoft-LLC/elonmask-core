@@ -1,23 +1,17 @@
 import { ControllerMessenger } from '@metamask/base-controller';
-
-import type {
+import {
   RateLimitControllerActions,
+  RateLimitStateChange,
+  RateLimitController,
   RateLimitMessenger,
-  RateLimitControllerEvents,
+  GetRateLimitState,
+  CallApi,
 } from './RateLimitController';
-import { RateLimitController } from './RateLimitController';
 
 const name = 'RateLimitController';
 
 const implementations = {
-  apiWithoutCustomLimit: {
-    method: jest.fn(),
-  },
-  apiWithCustomLimit: {
-    method: jest.fn(),
-    rateLimitCount: 2,
-    rateLimitTimeout: 3000,
-  },
+  showNativeNotification: jest.fn(),
 };
 
 type RateLimitedApis = typeof implementations;
@@ -29,8 +23,8 @@ type RateLimitedApis = typeof implementations;
  */
 function getUnrestrictedMessenger() {
   return new ControllerMessenger<
-    RateLimitControllerActions<RateLimitedApis>,
-    RateLimitControllerEvents<RateLimitedApis>
+    GetRateLimitState<RateLimitedApis> | CallApi<RateLimitedApis>,
+    RateLimitStateChange<RateLimitedApis>
   >();
 }
 
@@ -43,8 +37,13 @@ function getUnrestrictedMessenger() {
 function getRestrictedMessenger(
   controllerMessenger = getUnrestrictedMessenger(),
 ) {
-  return controllerMessenger.getRestricted<typeof name, never, never>({
+  return controllerMessenger.getRestricted<
+    typeof name,
+    RateLimitControllerActions<RateLimitedApis>['type'],
+    never
+  >({
     name,
+    allowedActions: ['RateLimitController:call'],
   }) as RateLimitMessenger<RateLimitedApis>;
 }
 
@@ -57,8 +56,7 @@ describe('RateLimitController', () => {
   });
 
   afterEach(() => {
-    implementations.apiWithoutCustomLimit.method.mockClear();
-    implementations.apiWithCustomLimit.method.mockClear();
+    implementations.showNativeNotification.mockClear();
     jest.useRealTimers();
   });
 
@@ -76,19 +74,19 @@ describe('RateLimitController', () => {
       await unrestricted.call(
         'RateLimitController:call',
         origin,
-        'apiWithoutCustomLimit',
+        'showNativeNotification',
         origin,
         message,
       ),
     ).toBeUndefined();
 
-    expect(implementations.apiWithoutCustomLimit.method).toHaveBeenCalledWith(
+    expect(implementations.showNativeNotification).toHaveBeenCalledWith(
       origin,
       message,
     );
   });
 
-  it('uses apiWithoutCustomLimit method', async () => {
+  it('uses showNativeNotification to show a notification', async () => {
     const messenger = getRestrictedMessenger();
 
     const controller = new RateLimitController({
@@ -96,10 +94,10 @@ describe('RateLimitController', () => {
       messenger,
     });
     expect(
-      await controller.call(origin, 'apiWithoutCustomLimit', origin, message),
+      await controller.call(origin, 'showNativeNotification', origin, message),
     ).toBeUndefined();
 
-    expect(implementations.apiWithoutCustomLimit.method).toHaveBeenCalledWith(
+    expect(implementations.showNativeNotification).toHaveBeenCalledWith(
       origin,
       message,
     );
@@ -114,41 +112,16 @@ describe('RateLimitController', () => {
     });
 
     expect(
-      await controller.call(origin, 'apiWithoutCustomLimit', origin, message),
+      await controller.call(origin, 'showNativeNotification', origin, message),
     ).toBeUndefined();
 
     await expect(
-      controller.call(origin, 'apiWithoutCustomLimit', origin, message),
+      controller.call(origin, 'showNativeNotification', origin, message),
     ).rejects.toThrow(
-      `"apiWithoutCustomLimit" is currently rate-limited. Please try again later`,
+      `"showNativeNotification" is currently rate-limited. Please try again later`,
     );
-
-    expect(
-      await controller.call(origin, 'apiWithCustomLimit', origin, message),
-    ).toBeUndefined();
-
-    expect(
-      await controller.call(origin, 'apiWithCustomLimit', origin, message),
-    ).toBeUndefined();
-
-    await expect(
-      controller.call(origin, 'apiWithCustomLimit', origin, message),
-    ).rejects.toThrow(
-      `"apiWithCustomLimit" is currently rate-limited. Please try again later`,
-    );
-
-    expect(implementations.apiWithoutCustomLimit.method).toHaveBeenCalledTimes(
-      1,
-    );
-
-    expect(implementations.apiWithCustomLimit.method).toHaveBeenCalledTimes(2);
-
-    expect(implementations.apiWithoutCustomLimit.method).toHaveBeenCalledWith(
-      origin,
-      message,
-    );
-
-    expect(implementations.apiWithCustomLimit.method).toHaveBeenCalledWith(
+    expect(implementations.showNativeNotification).toHaveBeenCalledTimes(1);
+    expect(implementations.showNativeNotification).toHaveBeenCalledWith(
       origin,
       message,
     );
@@ -162,37 +135,14 @@ describe('RateLimitController', () => {
       rateLimitCount: 1,
     });
     expect(
-      await controller.call(origin, 'apiWithoutCustomLimit', origin, message),
+      await controller.call(origin, 'showNativeNotification', origin, message),
     ).toBeUndefined();
     jest.runAllTimers();
     expect(
-      await controller.call(origin, 'apiWithoutCustomLimit', origin, message),
+      await controller.call(origin, 'showNativeNotification', origin, message),
     ).toBeUndefined();
-
-    expect(
-      await controller.call(origin, 'apiWithCustomLimit', origin, message),
-    ).toBeUndefined();
-
-    expect(
-      await controller.call(origin, 'apiWithCustomLimit', origin, message),
-    ).toBeUndefined();
-
-    jest.runAllTimers();
-
-    expect(
-      await controller.call(origin, 'apiWithCustomLimit', origin, message),
-    ).toBeUndefined();
-
-    expect(implementations.apiWithoutCustomLimit.method).toHaveBeenCalledTimes(
-      2,
-    );
-    expect(implementations.apiWithoutCustomLimit.method).toHaveBeenCalledWith(
-      origin,
-      message,
-    );
-
-    expect(implementations.apiWithCustomLimit.method).toHaveBeenCalledTimes(3);
-    expect(implementations.apiWithCustomLimit.method).toHaveBeenCalledWith(
+    expect(implementations.showNativeNotification).toHaveBeenCalledTimes(2);
+    expect(implementations.showNativeNotification).toHaveBeenCalledWith(
       origin,
       message,
     );
@@ -206,19 +156,19 @@ describe('RateLimitController', () => {
       rateLimitCount: 2,
     });
     expect(
-      await controller.call(origin, 'apiWithoutCustomLimit', origin, message),
+      await controller.call(origin, 'showNativeNotification', origin, message),
     ).toBeUndefined();
     jest.advanceTimersByTime(2500);
     expect(
-      await controller.call(origin, 'apiWithoutCustomLimit', origin, message),
+      await controller.call(origin, 'showNativeNotification', origin, message),
     ).toBeUndefined();
-    expect(controller.state.requests.apiWithoutCustomLimit[origin]).toBe(2);
+    expect(controller.state.requests.showNativeNotification[origin]).toBe(2);
     jest.advanceTimersByTime(2500);
-    expect(controller.state.requests.apiWithoutCustomLimit[origin]).toBe(0);
+    expect(controller.state.requests.showNativeNotification[origin]).toBe(0);
     expect(
-      await controller.call(origin, 'apiWithoutCustomLimit', origin, message),
+      await controller.call(origin, 'showNativeNotification', origin, message),
     ).toBeUndefined();
     jest.advanceTimersByTime(2500);
-    expect(controller.state.requests.apiWithoutCustomLimit[origin]).toBe(1);
+    expect(controller.state.requests.showNativeNotification[origin]).toBe(1);
   });
 });

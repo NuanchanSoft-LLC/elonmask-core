@@ -1,20 +1,18 @@
+import { abiERC1155 } from '@metamask/metamask-eth-abis';
 import { Contract } from '@ethersproject/contracts';
-import type { Web3Provider } from '@ethersproject/providers';
+import { BN } from 'ethereumjs-util';
+import { Web3Provider } from '@ethersproject/providers';
 import {
   ERC1155,
   ERC1155_INTERFACE_ID,
   ERC1155_METADATA_URI_INTERFACE_ID,
   ERC1155_TOKEN_RECEIVER_INTERFACE_ID,
-  safelyExecute,
   timeoutFetch,
 } from '@metamask/controller-utils';
-import { abiERC1155 } from '@metamask/metamask-eth-abis';
-import type { BN } from 'ethereumjs-util';
-
 import { getFormattedIpfsUrl, ethersBigNumberToBN } from '../../../assetsUtil';
 
 export class ERC1155Standard {
-  private readonly provider: Web3Provider;
+  private provider: Web3Provider;
 
   constructor(provider: Web3Provider) {
     this.provider = provider;
@@ -132,63 +130,13 @@ export class ERC1155Standard {
   };
 
   /**
-   * Query for symbol for a given asset.
-   *
-   * @param address - ERC1155 asset contract address.
-   * @returns Promise resolving to the 'symbol'.
-   */
-  getAssetSymbol = async (address: string): Promise<string> => {
-    const contract = new Contract(
-      address,
-      // Contract ABI fragment containing only the symbol method to fetch the symbol of the contract.
-      [
-        {
-          inputs: [],
-          name: 'symbol',
-          outputs: [{ name: '_symbol', type: 'string' }],
-          stateMutability: 'view',
-          type: 'function',
-          payable: false,
-        },
-      ],
-      this.provider,
-    );
-    return contract.symbol();
-  };
-
-  /**
-   * Query for name for a given asset.
-   *
-   * @param address - ERC1155 asset contract address.
-   * @returns Promise resolving to the 'name'.
-   */
-  getAssetName = async (address: string): Promise<string> => {
-    const contract = new Contract(
-      address,
-      // Contract ABI fragment containing only the name method to fetch the name of the contract.
-      [
-        {
-          inputs: [],
-          name: 'name',
-          outputs: [{ name: '_name', type: 'string' }],
-          stateMutability: 'view',
-          type: 'function',
-          payable: false,
-        },
-      ],
-      this.provider,
-    );
-    return contract.name();
-  };
-
-  /**
    * Query if a contract implements an interface.
    *
    * @param address - ERC1155 asset contract address.
    * @param interfaceId - Interface identifier.
    * @returns Promise resolving to whether the contract implements `interfaceID`.
    */
-  private readonly contractSupportsInterface = async (
+  private contractSupportsInterface = async (
     address: string,
     interfaceId: string,
   ): Promise<boolean> => {
@@ -212,32 +160,20 @@ export class ERC1155Standard {
     standard: string;
     tokenURI: string | undefined;
     image: string | undefined;
-    name: string | undefined;
-    symbol: string | undefined;
   }> => {
     const isERC1155 = await this.contractSupportsBase1155Interface(address);
 
     if (!isERC1155) {
       throw new Error("This isn't a valid ERC1155 contract");
     }
-
-    let image;
-
-    const [symbol, name, tokenURI] = await Promise.all([
-      safelyExecute(() => this.getAssetSymbol(address)),
-      safelyExecute(() => this.getAssetName(address)),
-      tokenId
-        ? safelyExecute(() =>
-            this.getTokenURI(address, tokenId).then((uri) =>
-              uri.startsWith('ipfs://')
-                ? getFormattedIpfsUrl(ipfsGateway, uri, true)
-                : uri,
-            ),
-          )
-        : undefined,
-    ]);
+    let tokenURI, image;
 
     if (tokenId) {
+      tokenURI = await this.getTokenURI(address, tokenId);
+      if (tokenURI.startsWith('ipfs://')) {
+        tokenURI = getFormattedIpfsUrl(ipfsGateway, tokenURI, true);
+      }
+
       try {
         const response = await timeoutFetch(tokenURI);
         const object = await response.json();
@@ -255,8 +191,6 @@ export class ERC1155Standard {
       standard: ERC1155,
       tokenURI,
       image,
-      symbol,
-      name,
     };
   };
 }

@@ -1,9 +1,5 @@
-import {
-  JsonRpcEngine,
-  createAsyncMiddleware,
-} from '@metamask/json-rpc-engine';
-import { rpcErrors, serializeError } from '@metamask/rpc-errors';
-
+import { JsonRpcEngine, createAsyncMiddleware } from 'json-rpc-engine';
+import { ethErrors, serializeError } from 'eth-rpc-errors';
 import { requestPermissionsHandler } from './requestPermissions';
 
 describe('requestPermissions RPC method', () => {
@@ -70,13 +66,7 @@ describe('requestPermissions RPC method', () => {
     });
 
     expect(response.result).toBeUndefined();
-    delete response.error.stack;
-    delete response.error.data.cause.stack;
-    const expectedError = new Error('foo');
-    delete expectedError.stack;
-    expect(response.error).toStrictEqual(
-      serializeError(expectedError, { shouldIncludeStack: false }),
-    );
+    expect(response.error).toStrictEqual(serializeError(new Error('foo')));
     expect(mockRequestPermissionsForOrigin).toHaveBeenCalledTimes(1);
     expect(mockRequestPermissionsForOrigin).toHaveBeenCalledWith({}, '1');
   });
@@ -100,7 +90,7 @@ describe('requestPermissions RPC method', () => {
         params: [], // doesn't matter
       };
 
-      const expectedError = rpcErrors
+      const expectedError = ethErrors.rpc
         .invalidRequest({
           message: 'Invalid request: Must specify a valid id.',
           data: { request: { ...req } },
@@ -134,7 +124,7 @@ describe('requestPermissions RPC method', () => {
         params: invalidParams,
       };
 
-      const expectedError = rpcErrors
+      const expectedError = ethErrors.rpc
         .invalidParams({
           data: { request: { ...req } },
         })

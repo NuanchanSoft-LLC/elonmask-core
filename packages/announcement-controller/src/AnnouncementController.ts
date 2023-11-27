@@ -1,9 +1,8 @@
-import type {
-  ControllerGetStateAction,
-  ControllerStateChangeEvent,
+import type { Patch } from 'immer';
+import {
+  BaseControllerV2,
   RestrictedControllerMessenger,
 } from '@metamask/base-controller';
-import { BaseController } from '@metamask/base-controller';
 
 type ViewedAnnouncement = {
   [id: number]: boolean;
@@ -43,15 +42,15 @@ export type AnnouncementControllerActions =
 export type AnnouncementControllerEvents =
   AnnouncementControllerStateChangeEvent;
 
-export type AnnouncementControllerGetStateAction = ControllerGetStateAction<
-  typeof controllerName,
-  AnnouncementControllerState
->;
+export type AnnouncementControllerGetStateAction = {
+  type: `${typeof controllerName}:getState`;
+  handler: () => AnnouncementControllerState;
+};
 
-export type AnnouncementControllerStateChangeEvent = ControllerStateChangeEvent<
-  typeof controllerName,
-  AnnouncementControllerState
->;
+export type AnnouncementControllerStateChangeEvent = {
+  type: `${typeof controllerName}:stateChange`;
+  payload: [AnnouncementControllerState, Patch[]];
+};
 
 const controllerName = 'AnnouncementController';
 
@@ -77,7 +76,7 @@ export type AnnouncementControllerMessenger = RestrictedControllerMessenger<
 /**
  * Controller for managing in-app announcements.
  */
-export class AnnouncementController extends BaseController<
+export class AnnouncementController extends BaseControllerV2<
   typeof controllerName,
   AnnouncementControllerState,
   AnnouncementControllerMessenger

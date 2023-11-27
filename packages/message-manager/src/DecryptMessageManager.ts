@@ -1,13 +1,12 @@
 import { v1 as random } from 'uuid';
-
-import type {
+import { normalizeMessageData, validateDecryptedMessageData } from './utils';
+import {
+  AbstractMessageManager,
   AbstractMessage,
   AbstractMessageParams,
   AbstractMessageParamsMetamask,
   OriginalRequest,
 } from './AbstractMessageManager';
-import { AbstractMessageManager } from './AbstractMessageManager';
-import { normalizeMessageData, validateDecryptedMessageData } from './utils';
 
 /**
  * @type DecryptMessage
@@ -19,9 +18,6 @@ import { normalizeMessageData, validateDecryptedMessageData } from './utils';
  * @property type - The json-prc signing method for which a signature request has been made.
  * A 'DecryptMessage' which always has a 'eth_decrypt' type
  */
-// This interface was created before this ESLint rule was added.
-// Convert to a `type` in a future major version.
-// eslint-disable-next-line @typescript-eslint/consistent-type-definitions
 export interface DecryptMessage extends AbstractMessage {
   messageParams: DecryptMessageParams;
 }
@@ -32,9 +28,6 @@ export interface DecryptMessage extends AbstractMessage {
  * Represents the parameters to pass to the eth_decrypt method once the request is approved.
  * @property data - A hex string conversion of the raw buffer data of the signature request
  */
-// This interface was created before this ESLint rule was added.
-// Convert to a `type` in a future major version.
-// eslint-disable-next-line @typescript-eslint/consistent-type-definitions
 export interface DecryptMessageParams extends AbstractMessageParams {
   data: string;
 }
@@ -49,9 +42,6 @@ export interface DecryptMessageParams extends AbstractMessageParams {
  * @property from - Address to sign this message from
  * @property origin? - Added for request origin identification
  */
-// This interface was created before this ESLint rule was added.
-// Convert to a `type` in a future major version.
-// eslint-disable-next-line @typescript-eslint/consistent-type-definitions
 export interface DecryptMessageParamsMetamask
   extends AbstractMessageParamsMetamask {
   data: string;

@@ -1,19 +1,17 @@
+import { abiERC721 } from '@metamask/metamask-eth-abis';
 import { Contract } from '@ethersproject/contracts';
-import type { Web3Provider } from '@ethersproject/providers';
 import {
   timeoutFetch,
   ERC721_INTERFACE_ID,
   ERC721_METADATA_INTERFACE_ID,
   ERC721_ENUMERABLE_INTERFACE_ID,
   ERC721,
-  safelyExecute,
 } from '@metamask/controller-utils';
-import { abiERC721 } from '@metamask/metamask-eth-abis';
-
+import { Web3Provider } from '@ethersproject/providers';
 import { getFormattedIpfsUrl } from '../../../assetsUtil';
 
 export class ERC721Standard {
-  private readonly provider: Web3Provider;
+  private provider: Web3Provider;
 
   constructor(provider: Web3Provider) {
     this.provider = provider;
@@ -137,7 +135,7 @@ export class ERC721Standard {
    * @param interfaceId - Interface identifier.
    * @returns Promise resolving to whether the contract implements `interfaceID`.
    */
-  private readonly contractSupportsInterface = async (
+  private contractSupportsInterface = async (
     address: string,
     interfaceId: string,
   ): Promise<boolean> => {
@@ -177,23 +175,28 @@ export class ERC721Standard {
       throw new Error("This isn't a valid ERC721 contract");
     }
 
-    const [symbol, name, tokenURI] = await Promise.all([
-      safelyExecute(() => this.getAssetSymbol(address)),
-      safelyExecute(() => this.getAssetName(address)),
-      tokenId
-        ? safelyExecute(() =>
-            this.getTokenURI(address, tokenId).then((uri) =>
-              uri.startsWith('ipfs://')
-                ? getFormattedIpfsUrl(ipfsGateway, uri, true)
-                : uri,
-            ),
-          )
-        : undefined,
-    ]);
+    let tokenURI, image, symbol, name;
 
-    let image;
-    if (tokenURI) {
+    // TODO upgrade to use Promise.allSettled for name/symbol when we can refactor to use es2020 in tsconfig
+    try {
+      symbol = await this.getAssetSymbol(address);
+    } catch {
+      // ignore
+    }
+
+    try {
+      name = await this.getAssetName(address);
+    } catch {
+      // ignore
+    }
+
+    if (tokenId) {
       try {
+        tokenURI = await this.getTokenURI(address, tokenId);
+        if (tokenURI.startsWith('ipfs://')) {
+          tokenURI = getFormattedIpfsUrl(ipfsGateway, tokenURI, true);
+        }
+
         const response = await timeoutFetch(tokenURI);
         const object = await response.json();
         image = object?.image;

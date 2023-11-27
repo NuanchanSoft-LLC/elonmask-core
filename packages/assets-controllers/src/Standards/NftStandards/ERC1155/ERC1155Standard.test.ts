@@ -1,7 +1,6 @@
 import { Web3Provider } from '@ethersproject/providers';
-import HttpProvider from '@metamask/ethjs-provider-http';
+import HttpProvider from 'ethjs-provider-http';
 import nock from 'nock';
-
 import { ERC1155Standard } from './ERC1155Standard';
 
 const MAINNET_PROVIDER_HTTP = new HttpProvider(
@@ -20,6 +19,12 @@ describe('ERC1155Standard', () => {
       chainId: 1,
     });
     erc1155Standard = new ERC1155Standard(MAINNET_PROVIDER);
+    nock.disableNetConnect();
+  });
+
+  afterAll(() => {
+    nock.restore();
+    nock.enableNetConnect();
   });
 
   it('should determine if contract supports URI metadata interface correctly', async () => {

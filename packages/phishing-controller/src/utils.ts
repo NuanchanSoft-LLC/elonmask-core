@@ -1,9 +1,9 @@
-import type {
+import {
   Hotlist,
   ListKeys,
+  phishingListKeyNameMap,
   PhishingListState,
 } from './PhishingController';
-import { phishingListKeyNameMap } from './PhishingController';
 /**
  * Fetches current epoch time in seconds.
  *

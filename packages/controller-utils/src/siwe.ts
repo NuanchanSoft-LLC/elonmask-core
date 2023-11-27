@@ -1,6 +1,5 @@
 import { ParsedMessage } from '@spruceid/siwe-parser';
 import { isHexPrefixed } from 'ethereumjs-util';
-
 import { projectLogger, createModuleLogger } from './logger';
 
 const log = createModuleLogger(projectLogger, 'detect-siwe');
@@ -43,18 +42,12 @@ function msgHexToText(hex: string): string {
  * @property {string} origin - The RFC 3986 originating authority of the signing request, including scheme
  * @property {ParsedMessage} siwe - The data parsed from the message
  */
-// This interface was created before this ESLint rule was added.
-// Convert to a `type` in a future major version.
-// eslint-disable-next-line @typescript-eslint/consistent-type-definitions
 export interface WrappedSIWERequest {
   from: string;
   origin: string;
   siwe: SIWEMessage;
 }
 
-// This interface was created before this ESLint rule was added.
-// Convert to a `type` in a future major version.
-// eslint-disable-next-line @typescript-eslint/consistent-type-definitions
 interface DomainParts {
   username?: string;
   hostname: string;

@@ -1,10 +1,9 @@
 import { ControllerMessenger } from '@metamask/base-controller';
-
-import type {
+import {
   NotificationControllerActions,
+  NotificationController,
   NotificationControllerStateChange,
 } from './NotificationController';
-import { NotificationController } from './NotificationController';
 
 const name = 'NotificationController';
 

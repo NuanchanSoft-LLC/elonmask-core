@@ -1,15 +1,13 @@
-import type { SIWEMessage } from '@metamask/controller-utils';
-import { detectSIWE } from '@metamask/controller-utils';
 import { v1 as random } from 'uuid';
-
-import type {
+import { detectSIWE, SIWEMessage } from '@metamask/controller-utils';
+import { normalizeMessageData, validateSignMessageData } from './utils';
+import {
+  AbstractMessageManager,
   AbstractMessage,
   AbstractMessageParams,
   AbstractMessageParamsMetamask,
   OriginalRequest,
 } from './AbstractMessageManager';
-import { AbstractMessageManager } from './AbstractMessageManager';
-import { normalizeMessageData, validateSignMessageData } from './utils';
 
 /**
  * @type Message
@@ -22,9 +20,6 @@ import { normalizeMessageData, validateSignMessageData } from './utils';
  * A 'Message' which always has a 'personal_sign' type
  * @property rawSig - Raw data of the signature request
  */
-// This interface was created before this ESLint rule was added.
-// Convert to a `type` in a future major version.
-// eslint-disable-next-line @typescript-eslint/consistent-type-definitions
 export interface PersonalMessage extends AbstractMessage {
   messageParams: PersonalMessageParams;
 }
@@ -37,9 +32,6 @@ export interface PersonalMessage extends AbstractMessage {
  * @property from - Address to sign this message from
  * @property origin? - Added for request origin identification
  */
-// This interface was created before this ESLint rule was added.
-// Convert to a `type` in a future major version.
-// eslint-disable-next-line @typescript-eslint/consistent-type-definitions
 export interface PersonalMessageParams extends AbstractMessageParams {
   data: string;
   siwe?: SIWEMessage;
@@ -55,9 +47,6 @@ export interface PersonalMessageParams extends AbstractMessageParams {
  * @property from - Address to sign this message from
  * @property origin? - Added for request origin identification
  */
-// This interface was created before this ESLint rule was added.
-// Convert to a `type` in a future major version.
-// eslint-disable-next-line @typescript-eslint/consistent-type-definitions
 export interface PersonalMessageParamsMetamask
   extends AbstractMessageParamsMetamask {
   data: string;
@@ -78,6 +67,44 @@ export class PersonalMessageManager extends AbstractMessageManager<
 
   /**
    * Creates a new Message with an 'unapproved' status using the passed messageParams.
+   * this.addMessage is called to add the new Message to this.messages, and to save the unapproved Messages.
+   *
+   * @param messageParams - The params for the personal_sign call to be made after the message is approved.
+   * @param req - The original request object possibly containing the origin.
+   * @returns Promise resolving to the raw data of the signature request.
+   */
+  async addUnapprovedMessageAsync(
+    messageParams: PersonalMessageParams,
+    req?: OriginalRequest,
+  ): Promise<string> {
+    validateSignMessageData(messageParams);
+    const messageId = await this.addUnapprovedMessage(messageParams, req);
+    return new Promise((resolve, reject) => {
+      this.hub.once(`${messageId}:finished`, (data: PersonalMessage) => {
+        switch (data.status) {
+          case 'signed':
+            return resolve(data.rawSig as string);
+          case 'rejected':
+            return reject(
+              new Error(
+                'MetaMask Personal Message Signature: User denied message signature.',
+              ),
+            );
+          default:
+            return reject(
+              new Error(
+                `MetaMask Personal Message Signature: Unknown problem: ${JSON.stringify(
+                  messageParams,
+                )}`,
+              ),
+            );
+        }
+      });
+    });
+  }
+
+  /**
+   * Creates a new Message with an 'unapproved' status using the passed messageParams.
    * this.addMessage is called to add the new Message to this.messages, and to save the
    * unapproved Messages.
    *
@@ -90,7 +117,6 @@ export class PersonalMessageManager extends AbstractMessageManager<
     messageParams: PersonalMessageParams,
     req?: OriginalRequest,
   ): Promise<string> {
-    validateSignMessageData(messageParams);
     if (req) {
       messageParams.origin = req.origin;
     }
@@ -103,7 +129,6 @@ export class PersonalMessageManager extends AbstractMessageManager<
     const messageData: PersonalMessage = {
       id: messageId,
       messageParams: finalMsgParams,
-      securityAlertResponse: req?.securityAlertResponse,
       status: 'unapproved',
       time: Date.now(),
       type: 'personal_sign',
@@ -126,10 +151,8 @@ export class PersonalMessageManager extends AbstractMessageManager<
   prepMessageForSigning(
     messageParams: PersonalMessageParamsMetamask,
   ): Promise<PersonalMessageParams> {
-    // Using delete operation will throw an error on frozen messageParams
-    const { metamaskId: _metamaskId, ...messageParamsWithoutId } =
-      messageParams;
-    return Promise.resolve(messageParamsWithoutId);
+    delete messageParams.metamaskId;
+    return Promise.resolve(messageParams);
   }
 }
 

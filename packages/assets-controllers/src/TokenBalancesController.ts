@@ -1,12 +1,14 @@
-import type { BaseConfig, BaseState } from '@metamask/base-controller';
-import { BaseControllerV1 } from '@metamask/base-controller';
+import { BN } from 'ethereumjs-util';
+import {
+  BaseController,
+  BaseConfig,
+  BaseState,
+} from '@metamask/base-controller';
 import { safelyExecute } from '@metamask/controller-utils';
 import type { PreferencesState } from '@metamask/preferences-controller';
-import { BN } from 'ethereumjs-util';
-
+import { Token } from './TokenRatesController';
+import { TokensState } from './TokensController';
 import type { AssetsContractController } from './AssetsContractController';
-import type { Token } from './TokenRatesController';
-import type { TokensState } from './TokensController';
 
 // TODO: Remove this export in the next major release
 export { BN };
@@ -18,9 +20,6 @@ export { BN };
  * @property interval - Polling interval used to fetch new token balances
  * @property tokens - List of tokens to track balances for
  */
-// This interface was created before this ESLint rule was added.
-// Convert to a `type` in a future major version.
-// eslint-disable-next-line @typescript-eslint/consistent-type-definitions
 export interface TokenBalancesConfig extends BaseConfig {
   interval: number;
   tokens: Token[];
@@ -32,9 +31,6 @@ export interface TokenBalancesConfig extends BaseConfig {
  * Token balances controller state
  * @property contractBalances - Hash of token contract addresses to balances
  */
-// This interface was created before this ESLint rule was added.
-// Convert to a `type` in a future major version.
-// eslint-disable-next-line @typescript-eslint/consistent-type-definitions
 export interface TokenBalancesState extends BaseState {
   contractBalances: { [address: string]: BN };
 }
@@ -43,7 +39,7 @@ export interface TokenBalancesState extends BaseState {
  * Controller that passively polls on a set interval token balances
  * for tokens stored in the TokensController
  */
-export class TokenBalancesController extends BaseControllerV1<
+export class TokenBalancesController extends BaseController<
   TokenBalancesConfig,
   TokenBalancesState
 > {
@@ -54,9 +50,9 @@ export class TokenBalancesController extends BaseControllerV1<
    */
   override name = 'TokenBalancesController';
 
-  private readonly getSelectedAddress: () => PreferencesState['selectedAddress'];
+  private getSelectedAddress: () => PreferencesState['selectedAddress'];
 
-  private readonly getERC20BalanceOf: AssetsContractController['getERC20BalanceOf'];
+  private getERC20BalanceOf: AssetsContractController['getERC20BalanceOf'];
 
   /**
    * Creates a TokenBalancesController instance.
@@ -122,17 +118,17 @@ export class TokenBalancesController extends BaseControllerV1<
     }
     const { tokens } = this.config;
     const newContractBalances: { [address: string]: BN } = {};
-    for (const token of tokens) {
-      const { address } = token;
+    for (const i in tokens) {
+      const { address } = tokens[i];
       try {
         newContractBalances[address] = await this.getERC20BalanceOf(
           address,
           this.getSelectedAddress(),
         );
-        token.balanceError = null;
+        tokens[i].balanceError = null;
       } catch (error) {
         newContractBalances[address] = new BN(0);
-        token.balanceError = error;
+        tokens[i].balanceError = error;
       }
     }
     this.update({ contractBalances: newContractBalances });

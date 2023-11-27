@@ -1,16 +1,15 @@
 import { Contract } from '@ethersproject/contracts';
-import type { Web3Provider } from '@ethersproject/providers';
-import { decodeSingle } from '@metamask/abi-utils';
-import { ERC20 } from '@metamask/controller-utils';
 import { abiERC20 } from '@metamask/metamask-eth-abis';
-import { assertIsStrictHexString } from '@metamask/utils';
-import { toUtf8 } from 'ethereumjs-util';
-import type { BN } from 'ethereumjs-util';
+import { BN, toUtf8 } from 'ethereumjs-util';
+import { decodeSingle } from '@metamask/abi-utils';
 
+import { Web3Provider } from '@ethersproject/providers';
+import { ERC20 } from '@metamask/controller-utils';
+import { assertIsStrictHexString } from '@metamask/utils';
 import { ethersBigNumberToBN } from '../assetsUtil';
 
 export class ERC20Standard {
-  private readonly provider: Web3Provider;
+  private provider: Web3Provider;
 
   constructor(provider: Web3Provider) {
     this.provider = provider;
@@ -44,26 +43,6 @@ export class ERC20Standard {
       // Mirror previous implementation
       if (err.message.includes('call revert exception')) {
         throw new Error('Failed to parse token decimals');
-      }
-      throw err;
-    }
-  }
-
-  /**
-   * Query for the name for a given ERC20 asset.
-   *
-   * @param address - ERC20 asset contract string.
-   * @returns Promise resolving to the 'name'.
-   */
-  async getTokenName(address: string): Promise<string> {
-    const contract = new Contract(address, abiERC20, this.provider);
-    try {
-      const name = await contract.name();
-      return name.toString();
-    } catch (err: any) {
-      // Mirror previous implementation
-      if (err.message.includes('call revert exception')) {
-        throw new Error('Failed to parse token name');
       }
       throw err;
     }
@@ -119,11 +98,14 @@ export class ERC20Standard {
     decimals: string | undefined;
     balance: BN | undefined;
   }> {
-    const [decimals, symbol, balance] = await Promise.all([
+    const [decimals, symbol] = await Promise.all([
       this.getTokenDecimals(address),
       this.getTokenSymbol(address),
-      userAddress ? this.getBalanceOf(address, userAddress) : undefined,
     ]);
+    let balance;
+    if (userAddress) {
+      balance = await this.getBalanceOf(address, userAddress);
+    }
     return {
       decimals,
       symbol,

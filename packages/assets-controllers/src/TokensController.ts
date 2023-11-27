@@ -1,33 +1,33 @@
+import { EventEmitter } from 'events';
+import {
+  AcceptRequest as AcceptApprovalRequest,
+  AddApprovalRequest,
+  RejectRequest as RejectApprovalRequest,
+} from '@metamask/approval-controller';
+import contractsMap from '@metamask/contract-metadata';
+import { abiERC721 } from '@metamask/metamask-eth-abis';
+import { v1 as random } from 'uuid';
+import { Mutex } from 'async-mutex';
 import { Contract } from '@ethersproject/contracts';
 import { Web3Provider } from '@ethersproject/providers';
-import type { AddApprovalRequest } from '@metamask/approval-controller';
-import type {
+import { AbortController as WhatwgAbortController } from 'abort-controller';
+import {
+  BaseController,
   BaseConfig,
   BaseState,
   RestrictedControllerMessenger,
 } from '@metamask/base-controller';
-import { BaseControllerV1 } from '@metamask/base-controller';
-import contractsMap from '@metamask/contract-metadata';
+import type { PreferencesState } from '@metamask/preferences-controller';
+import type { NetworkState } from '@metamask/network-controller';
 import {
+  NetworkType,
   toChecksumHexAddress,
   ERC721_INTERFACE_ID,
   ORIGIN_METAMASK,
   ApprovalType,
-  ERC20,
 } from '@metamask/controller-utils';
-import { abiERC721 } from '@metamask/metamask-eth-abis';
-import type {
-  NetworkClientId,
-  NetworkController,
-  NetworkState,
-} from '@metamask/network-controller';
-import type { PreferencesState } from '@metamask/preferences-controller';
-import type { Hex } from '@metamask/utils';
-import { Mutex } from 'async-mutex';
-import { EventEmitter } from 'events';
-import { v1 as random } from 'uuid';
-
-import type { AssetsContractController } from './AssetsContractController';
+import type { Token } from './TokenRatesController';
+import { TokenListToken } from './TokenListController';
 import {
   formatAggregatorNames,
   formatIconUrlWithProxy,
@@ -37,45 +37,69 @@ import {
   fetchTokenMetadata,
   TOKEN_METADATA_NO_SUPPORT_ERROR,
 } from './token-service';
-import type {
-  TokenListMap,
-  TokenListState,
-  TokenListToken,
-} from './TokenListController';
-import type { Token } from './TokenRatesController';
 
 /**
  * @type TokensConfig
  *
  * Tokens controller configuration
+ * @property networkType - Network ID as per net_version
  * @property selectedAddress - Vault selected address
  */
-// This interface was created before this ESLint rule was added.
-// Convert to a `type` in a future major version.
-// eslint-disable-next-line @typescript-eslint/consistent-type-definitions
 export interface TokensConfig extends BaseConfig {
+  networkType: NetworkType;
   selectedAddress: string;
-  chainId: Hex;
+  chainId: string;
   provider: any;
 }
+
+/**
+ * @type AssetSuggestionResult
+ * @property result - Promise resolving to a new suggested asset address
+ * @property suggestedAssetMeta - Meta information about this new suggested asset
+ */
+interface AssetSuggestionResult {
+  result: Promise<string>;
+  suggestedAssetMeta: SuggestedAssetMeta;
+}
+
+enum SuggestedAssetStatus {
+  accepted = 'accepted',
+  failed = 'failed',
+  pending = 'pending',
+  rejected = 'rejected',
+}
+
+export type SuggestedAssetMetaBase = {
+  id: string;
+  time: number;
+  type: string;
+  asset: Token;
+  interactingAddress?: string;
+};
 
 /**
  * @type SuggestedAssetMeta
  *
  * Suggested asset by EIP747 meta data
+ * @property error - Synthesized error information for failed asset suggestions
  * @property id - Generated UUID associated with this suggested asset
+ * @property status - String status of this this suggested asset
  * @property time - Timestamp associated with this this suggested asset
  * @property type - Type type this suggested asset
  * @property asset - Asset suggested object
  * @property interactingAddress - Account address that requested watch asset
  */
-type SuggestedAssetMeta = {
-  id: string;
-  time: number;
-  type: string;
-  asset: Token;
-  interactingAddress: string;
-};
+export type SuggestedAssetMeta =
+  | (SuggestedAssetMetaBase & {
+      status: SuggestedAssetStatus.failed;
+      error: Error;
+    })
+  | (SuggestedAssetMetaBase & {
+      status:
+        | SuggestedAssetStatus.accepted
+        | SuggestedAssetStatus.rejected
+        | SuggestedAssetStatus.pending;
+    });
 
 /**
  * @type TokensState
@@ -87,17 +111,16 @@ type SuggestedAssetMeta = {
  * @property allTokens - Object containing tokens by network and account
  * @property allIgnoredTokens - Object containing hidden/ignored tokens by network and account
  * @property allDetectedTokens - Object containing tokens detected with non-zero balances
+ * @property suggestedAssets - List of pending suggested assets to be added or canceled
  */
-// This interface was created before this ESLint rule was added.
-// Convert to a `type` in a future major version.
-// eslint-disable-next-line @typescript-eslint/consistent-type-definitions
 export interface TokensState extends BaseState {
   tokens: Token[];
   ignoredTokens: string[];
   detectedTokens: Token[];
-  allTokens: { [chainId: Hex]: { [key: string]: Token[] } };
-  allIgnoredTokens: { [chainId: Hex]: { [key: string]: string[] } };
-  allDetectedTokens: { [chainId: Hex]: { [key: string]: Token[] } };
+  allTokens: { [key: string]: { [key: string]: Token[] } };
+  allIgnoredTokens: { [key: string]: { [key: string]: string[] } };
+  allDetectedTokens: { [key: string]: { [key: string]: Token[] } };
+  suggestedAssets: SuggestedAssetMeta[];
 }
 
 /**
@@ -108,7 +131,10 @@ const controllerName = 'TokensController';
 /**
  * The external actions available to the {@link TokensController}.
  */
-type AllowedActions = AddApprovalRequest;
+type AllowedActions =
+  | AddApprovalRequest
+  | AcceptApprovalRequest
+  | RejectApprovalRequest;
 
 /**
  * The messenger of the {@link TokensController}.
@@ -124,15 +150,32 @@ export type TokensControllerMessenger = RestrictedControllerMessenger<
 /**
  * Controller that stores assets and exposes convenience methods
  */
-export class TokensController extends BaseControllerV1<
+export class TokensController extends BaseController<
   TokensConfig,
   TokensState
 > {
-  private readonly mutex = new Mutex();
+  private mutex = new Mutex();
 
-  private abortController: AbortController;
+  private ethersProvider: any;
 
-  private readonly messagingSystem: TokensControllerMessenger;
+  private abortController: WhatwgAbortController;
+
+  private messagingSystem: TokensControllerMessenger;
+
+  private failSuggestedAsset(
+    suggestedAssetMeta: SuggestedAssetMeta,
+    error: unknown,
+  ) {
+    const failedSuggestedAssetMeta = {
+      ...suggestedAssetMeta,
+      status: SuggestedAssetStatus.failed,
+      error,
+    };
+    this.hub.emit(
+      `${suggestedAssetMeta.id}:finished`,
+      failedSuggestedAssetMeta,
+    );
+  }
 
   /**
    * Fetch metadata for a token.
@@ -171,47 +214,29 @@ export class TokensController extends BaseControllerV1<
    */
   override name = 'TokensController';
 
-  private readonly getERC20TokenName: AssetsContractController['getERC20TokenName'];
-
-  private readonly getNetworkClientById: NetworkController['getNetworkClientById'];
-
   /**
    * Creates a TokensController instance.
    *
    * @param options - The controller options.
-   * @param options.chainId - The chain ID of the current network.
    * @param options.onPreferencesStateChange - Allows subscribing to preference controller state changes.
    * @param options.onNetworkStateChange - Allows subscribing to network controller state changes.
-   * @param options.onTokenListStateChange - Allows subscribing to token list controller state changes.
-   * @param options.getERC20TokenName - Gets the ERC-20 token name.
-   * @param options.getNetworkClientById - Gets the network client with the given id from the NetworkController.
    * @param options.config - Initial options used to configure this controller.
    * @param options.state - Initial state to set on this controller.
    * @param options.messenger - The controller messenger.
    */
   constructor({
-    chainId: initialChainId,
     onPreferencesStateChange,
     onNetworkStateChange,
-    onTokenListStateChange,
-    getERC20TokenName,
-    getNetworkClientById,
     config,
     state,
     messenger,
   }: {
-    chainId: Hex;
     onPreferencesStateChange: (
       listener: (preferencesState: PreferencesState) => void,
     ) => void;
     onNetworkStateChange: (
       listener: (networkState: NetworkState) => void,
     ) => void;
-    onTokenListStateChange: (
-      listener: (tokenListState: TokenListState) => void,
-    ) => void;
-    getERC20TokenName: AssetsContractController['getERC20TokenName'];
-    getNetworkClientById: NetworkController['getNetworkClientById'];
     config?: Partial<TokensConfig>;
     state?: Partial<TokensState>;
     messenger: TokensControllerMessenger;
@@ -219,8 +244,9 @@ export class TokensController extends BaseControllerV1<
     super(config, state);
 
     this.defaultConfig = {
+      networkType: NetworkType.mainnet,
       selectedAddress: '',
-      chainId: initialChainId,
+      chainId: '',
       provider: undefined,
       ...config,
     };
@@ -232,13 +258,12 @@ export class TokensController extends BaseControllerV1<
       allTokens: {},
       allIgnoredTokens: {},
       allDetectedTokens: {},
+      suggestedAssets: [],
       ...state,
     };
 
     this.initialize();
-    this.abortController = new AbortController();
-    this.getERC20TokenName = getERC20TokenName;
-    this.getNetworkClientById = getNetworkClientById;
+    this.abortController = new WhatwgAbortController();
 
     this.messagingSystem = messenger;
 
@@ -258,64 +283,43 @@ export class TokensController extends BaseControllerV1<
       const { selectedAddress } = this.config;
       const { chainId } = providerConfig;
       this.abortController.abort();
-      this.abortController = new AbortController();
+      this.abortController = new WhatwgAbortController();
       this.configure({ chainId });
+      this.ethersProvider = this._instantiateNewEthersProvider();
       this.update({
         tokens: allTokens[chainId]?.[selectedAddress] || [],
         ignoredTokens: allIgnoredTokens[chainId]?.[selectedAddress] || [],
         detectedTokens: allDetectedTokens[chainId]?.[selectedAddress] || [],
       });
     });
+  }
 
-    onTokenListStateChange(({ tokenList }) => {
-      const { tokens } = this.state;
-      if (tokens.length && !tokens[0].name) {
-        this.updateTokensAttribute(tokenList, 'name');
-      }
-    });
+  _instantiateNewEthersProvider(): any {
+    return new Web3Provider(this.config?.provider);
   }
 
   /**
    * Adds a token to the stored token list.
    *
-   * @param options - The method argument object.
-   * @param options.address - Hex address of the token contract.
-   * @param options.symbol - Symbol of the token.
-   * @param options.decimals - Number of decimals the token uses.
-   * @param options.name - Name of the token.
-   * @param options.image - Image of the token.
-   * @param options.interactingAddress - The address of the account to add a token to.
-   * @param options.networkClientId - Network Client ID.
+   * @param address - Hex address of the token contract.
+   * @param symbol - Symbol of the token.
+   * @param decimals - Number of decimals the token uses.
+   * @param image - Image of the token.
+   * @param interactingAddress - The address of the account to add a token to.
    * @returns Current token list.
    */
-  async addToken({
-    address,
-    symbol,
-    decimals,
-    name,
-    image,
-    interactingAddress,
-    networkClientId,
-  }: {
-    address: string;
-    symbol: string;
-    decimals: number;
-    name?: string;
-    image?: string;
-    interactingAddress?: string;
-    networkClientId?: NetworkClientId;
-  }): Promise<Token[]> {
-    const { chainId, selectedAddress } = this.config;
-    const releaseLock = await this.mutex.acquire();
+  async addToken(
+    address: string,
+    symbol: string,
+    decimals: number,
+    image?: string,
+    interactingAddress?: string,
+  ): Promise<Token[]> {
     const { allTokens, allIgnoredTokens, allDetectedTokens } = this.state;
-    let currentChainId = chainId;
-    if (networkClientId) {
-      currentChainId =
-        this.getNetworkClientById(networkClientId).configuration.chainId;
-    }
-
+    const { chainId: currentChainId, selectedAddress } = this.config;
     const accountAddress = interactingAddress || selectedAddress;
     const isInteractingWithWalletAccount = accountAddress === selectedAddress;
+    const releaseLock = await this.mutex.acquire();
 
     try {
       address = toChecksumHexAddress(address);
@@ -326,12 +330,10 @@ export class TokensController extends BaseControllerV1<
         allDetectedTokens[currentChainId]?.[accountAddress] || [];
       const newTokens: Token[] = [...tokens];
       const [isERC721, tokenMetadata] = await Promise.all([
-        this._detectIsERC721(address, networkClientId),
-        // TODO parameterize the token metadata fetch by networkClientId
+        this._detectIsERC721(address),
         this.fetchTokenMetadata(address),
       ]);
-      // TODO remove this once this method is fully parameterized by networkClientId
-      if (!networkClientId && currentChainId !== this.config.chainId) {
+      if (currentChainId !== this.config.chainId) {
         throw new Error(
           'TokensController Error: Switched networks while adding token',
         );
@@ -343,17 +345,17 @@ export class TokensController extends BaseControllerV1<
         image:
           image ||
           formatIconUrlWithProxy({
-            chainId: currentChainId,
+            chainId: this.config.chainId,
             tokenAddress: address,
           }),
         isERC721,
         aggregators: formatAggregatorNames(tokenMetadata?.aggregators || []),
-        name,
       };
-      const previousIndex = newTokens.findIndex(
+      const previousEntry = newTokens.find(
         (token) => token.address.toLowerCase() === address.toLowerCase(),
       );
-      if (previousIndex !== -1) {
+      if (previousEntry) {
+        const previousIndex = newTokens.indexOf(previousEntry);
         newTokens[previousIndex] = newEntry;
       } else {
         newTokens.push(newEntry);
@@ -372,7 +374,6 @@ export class TokensController extends BaseControllerV1<
           newIgnoredTokens,
           newDetectedTokens,
           interactingAddress: accountAddress,
-          interactingChainId: currentChainId,
         });
 
       let newState: Partial<TokensState> = {
@@ -402,9 +403,8 @@ export class TokensController extends BaseControllerV1<
    * Add a batch of tokens.
    *
    * @param tokensToImport - Array of tokens to import.
-   * @param networkClientId - Optional network client ID used to determine interacting chain ID.
    */
-  async addTokens(tokensToImport: Token[], networkClientId?: NetworkClientId) {
+  async addTokens(tokensToImport: Token[]) {
     const releaseLock = await this.mutex.acquire();
     const { tokens, detectedTokens, ignoredTokens } = this.state;
     const importedTokensMap: { [key: string]: true } = {};
@@ -413,10 +413,10 @@ export class TokensController extends BaseControllerV1<
       output[current.address] = current;
       return output;
     }, {} as { [address: string]: Token });
+
     try {
       tokensToImport.forEach((tokenToAdd) => {
-        const { address, symbol, decimals, image, aggregators, name } =
-          tokenToAdd;
+        const { address, symbol, decimals, image, aggregators } = tokenToAdd;
         const checksumAddress = toChecksumHexAddress(address);
         const formattedToken: Token = {
           address: checksumAddress,
@@ -424,7 +424,6 @@ export class TokensController extends BaseControllerV1<
           decimals,
           image,
           aggregators,
-          name,
         };
         newTokensMap[address] = formattedToken;
         importedTokensMap[address.toLowerCase()] = true;
@@ -439,18 +438,11 @@ export class TokensController extends BaseControllerV1<
         (tokenAddress) => !newTokensMap[tokenAddress.toLowerCase()],
       );
 
-      let interactingChainId;
-      if (networkClientId) {
-        interactingChainId =
-          this.getNetworkClientById(networkClientId).configuration.chainId;
-      }
-
       const { newAllTokens, newAllDetectedTokens, newAllIgnoredTokens } =
         this._getNewAllTokensState({
           newTokens,
           newDetectedTokens,
           newIgnoredTokens,
-          interactingChainId,
         });
 
       this.update({
@@ -516,32 +508,17 @@ export class TokensController extends BaseControllerV1<
    */
   async addDetectedTokens(
     incomingDetectedTokens: Token[],
-    detectionDetails?: { selectedAddress: string; chainId: Hex },
+    detectionDetails?: { selectedAddress: string; chainId: string },
   ) {
     const releaseLock = await this.mutex.acquire();
-
-    // Get existing tokens for the chain + account
-    const chainId = detectionDetails?.chainId ?? this.config.chainId;
-    const accountAddress =
-      detectionDetails?.selectedAddress ?? this.config.selectedAddress;
-
-    const { allTokens, allDetectedTokens, allIgnoredTokens } = this.state;
-    let newTokens = [...(allTokens?.[chainId]?.[accountAddress] ?? [])];
-    let newDetectedTokens = [
-      ...(allDetectedTokens?.[chainId]?.[accountAddress] ?? []),
-    ];
+    const { tokens, detectedTokens, ignoredTokens } = this.state;
+    const newTokens: Token[] = [...tokens];
+    let newDetectedTokens: Token[] = [...detectedTokens];
 
     try {
       incomingDetectedTokens.forEach((tokenToAdd) => {
-        const {
-          address,
-          symbol,
-          decimals,
-          image,
-          aggregators,
-          isERC721,
-          name,
-        } = tokenToAdd;
+        const { address, symbol, decimals, image, aggregators, isERC721 } =
+          tokenToAdd;
         const checksumAddress = toChecksumHexAddress(address);
         const newEntry: Token = {
           address: checksumAddress,
@@ -550,27 +527,29 @@ export class TokensController extends BaseControllerV1<
           image,
           isERC721,
           aggregators,
-          name,
         };
-        const previousImportedIndex = newTokens.findIndex(
+        const previousImportedEntry = newTokens.find(
           (token) =>
             token.address.toLowerCase() === checksumAddress.toLowerCase(),
         );
-        if (previousImportedIndex !== -1) {
+        if (previousImportedEntry) {
           // Update existing data of imported token
+          const previousImportedIndex = newTokens.indexOf(
+            previousImportedEntry,
+          );
           newTokens[previousImportedIndex] = newEntry;
         } else {
-          const ignoredTokenIndex =
-            allIgnoredTokens?.[chainId]?.[accountAddress]?.indexOf(address) ??
-            -1;
-
+          const ignoredTokenIndex = ignoredTokens.indexOf(address);
           if (ignoredTokenIndex === -1) {
             // Add detected token
-            const previousDetectedIndex = newDetectedTokens.findIndex(
+            const previousDetectedEntry = newDetectedTokens.find(
               (token) =>
                 token.address.toLowerCase() === checksumAddress.toLowerCase(),
             );
-            if (previousDetectedIndex !== -1) {
+            if (previousDetectedEntry) {
+              const previousDetectedIndex = newDetectedTokens.indexOf(
+                previousDetectedEntry,
+              );
               newDetectedTokens[previousDetectedIndex] = newEntry;
             } else {
               newDetectedTokens.push(newEntry);
@@ -579,23 +558,26 @@ export class TokensController extends BaseControllerV1<
         }
       });
 
+      const {
+        selectedAddress: interactingAddress,
+        chainId: interactingChainId,
+      } = detectionDetails || {};
+
       const { newAllTokens, newAllDetectedTokens } = this._getNewAllTokensState(
         {
           newTokens,
           newDetectedTokens,
-          interactingAddress: accountAddress,
-          interactingChainId: chainId,
+          interactingAddress,
+          interactingChainId,
         },
       );
 
-      // We may be detecting tokens on a different chain/account pair than are currently configured.
-      // Re-point `tokens` and `detectedTokens` to keep them referencing the current chain/account.
-      const { chainId: currentChain, selectedAddress: currentAddress } =
-        this.config;
-
-      newTokens = newAllTokens?.[currentChain]?.[currentAddress] || [];
+      const { chainId, selectedAddress } = this.config;
+      // if the newly added detectedTokens were detected on (and therefore added to) a different chainId/selectedAddress than the currently configured combo
+      // the newDetectedTokens (which should contain the detectedTokens on the current chainId/address combo) needs to be repointed to the current chainId/address pair
+      // if the detectedTokens were detected on the current chainId/address then this won't change anything.
       newDetectedTokens =
-        newAllDetectedTokens?.[currentChain]?.[currentAddress] || [];
+        newAllDetectedTokens?.[chainId]?.[selectedAddress] || [];
 
       this.update({
         tokens: newTokens,
@@ -627,40 +609,13 @@ export class TokensController extends BaseControllerV1<
   }
 
   /**
-   * This is a function that updates the tokens name for the tokens name if it is not defined.
-   *
-   * @param tokenList - Represents the fetched token list from service API
-   * @param tokenAttribute - Represents the token attribute that we want to update on the token list
-   */
-  private updateTokensAttribute(
-    tokenList: TokenListMap,
-    tokenAttribute: keyof Token & keyof TokenListToken,
-  ) {
-    const { tokens } = this.state;
-
-    const newTokens = tokens.map((token) => {
-      const newToken = tokenList[token.address.toLowerCase()];
-
-      return !token[tokenAttribute] && newToken?.[tokenAttribute]
-        ? { ...token, [tokenAttribute]: newToken[tokenAttribute] }
-        : { ...token };
-    });
-
-    this.update({ tokens: newTokens });
-  }
-
-  /**
    * Detects whether or not a token is ERC-721 compatible.
    *
    * @param tokenAddress - The token contract address.
-   * @param networkClientId - Optional network client ID to fetch contract info with.
    * @returns A boolean indicating whether the token address passed in supports the EIP-721
    * interface.
    */
-  async _detectIsERC721(
-    tokenAddress: string,
-    networkClientId?: NetworkClientId,
-  ) {
+  async _detectIsERC721(tokenAddress: string) {
     const checksumAddress = toChecksumHexAddress(tokenAddress);
     // if this token is already in our contract metadata map we don't need
     // to check against the contract
@@ -673,7 +628,7 @@ export class TokensController extends BaseControllerV1<
     const tokenContract = this._createEthersContract(
       tokenAddress,
       abiERC721,
-      networkClientId,
+      this.ethersProvider,
     );
     try {
       return await tokenContract.supportsInterface(ERC721_INTERFACE_ID);
@@ -689,14 +644,9 @@ export class TokensController extends BaseControllerV1<
   _createEthersContract(
     tokenAddress: string,
     abi: string,
-    networkClientId?: NetworkClientId,
+    ethersProvider: any,
   ): Contract {
-    const provider = networkClientId
-      ? this.getNetworkClientById(networkClientId).provider
-      : this.config?.provider;
-
-    const web3provider = new Web3Provider(provider);
-    const tokenContract = new Contract(tokenAddress, abi, web3provider);
+    const tokenContract = new Contract(tokenAddress, abi, ethersProvider);
     return tokenContract;
   }
 
@@ -705,62 +655,156 @@ export class TokensController extends BaseControllerV1<
   }
 
   /**
-   * Adds a new suggestedAsset to the list of watched assets.
-   * Parameters will be validated according to the asset type being watched.
+   * Adds a new suggestedAsset to state. Parameters will be validated according to
+   * asset type being watched. A `<suggestedAssetMeta.id>:pending` hub event will be emitted once added.
    *
-   * @param options - The method options.
-   * @param options.asset - The asset to be watched. For now only ERC20 tokens are accepted.
-   * @param options.type - The asset type.
-   * @param options.interactingAddress - The address of the account that is requesting to watch the asset.
-   * @param options.networkClientId - Network Client ID.
+   * @param asset - The asset to be watched. For now only ERC20 tokens are accepted.
+   * @param type - The asset type.
+   * @param interactingAddress - The address of the account that is requesting to watch the asset.
    * @returns Object containing a Promise resolving to the suggestedAsset address if accepted.
    */
-  async watchAsset({
-    asset,
-    type,
-    interactingAddress,
-    networkClientId,
-  }: {
-    asset: Token;
-    type: string;
-    interactingAddress?: string;
-    networkClientId?: NetworkClientId;
-  }): Promise<void> {
-    if (type !== ERC20) {
-      throw new Error(`Asset of type ${type} not supported`);
-    }
-
+  async watchAsset(
+    asset: Token,
+    type: string,
+    interactingAddress?: string,
+  ): Promise<AssetSuggestionResult> {
     const { selectedAddress } = this.config;
 
-    const suggestedAssetMeta: SuggestedAssetMeta = {
+    const suggestedAssetMeta: SuggestedAssetMeta & {
+      interactingAddress: string;
+    } = {
       asset,
       id: this._generateRandomId(),
+      status: SuggestedAssetStatus.pending as SuggestedAssetStatus.pending,
       time: Date.now(),
       type,
       interactingAddress: interactingAddress || selectedAddress,
     };
 
-    validateTokenToWatch(asset);
-
-    await this._requestApproval(suggestedAssetMeta);
-
-    let name;
     try {
-      name = await this.getERC20TokenName(asset.address, networkClientId);
+      switch (type) {
+        case 'ERC20':
+          validateTokenToWatch(asset);
+          break;
+        default:
+          throw new Error(`Asset of type ${type} not supported`);
+      }
     } catch (error) {
-      name = undefined;
+      this.failSuggestedAsset(suggestedAssetMeta, error);
+      return Promise.reject(error);
     }
 
-    const { address, symbol, decimals, image } = asset;
-    await this.addToken({
-      address,
-      symbol,
-      decimals,
-      name,
-      image,
-      interactingAddress: suggestedAssetMeta.interactingAddress,
-      networkClientId,
+    const result: Promise<string> = new Promise((resolve, reject) => {
+      this.hub.once(
+        `${suggestedAssetMeta.id}:finished`,
+        (meta: SuggestedAssetMeta) => {
+          switch (meta.status) {
+            case SuggestedAssetStatus.accepted:
+              return resolve(meta.asset.address);
+            case SuggestedAssetStatus.rejected:
+              return reject(new Error('User rejected to watch the asset.'));
+            case SuggestedAssetStatus.failed:
+              return reject(new Error(meta.error.message));
+            /* istanbul ignore next */
+            default:
+              return reject(new Error(`Unknown status: ${meta.status}`));
+          }
+        },
+      );
     });
+
+    const { suggestedAssets } = this.state;
+    suggestedAssets.push(suggestedAssetMeta);
+    this.update({ suggestedAssets: [...suggestedAssets] });
+
+    this._requestApproval(suggestedAssetMeta);
+
+    return { result, suggestedAssetMeta };
+  }
+
+  /**
+   * Accepts to watch an asset and updates it's status and deletes the suggestedAsset from state,
+   * adding the asset to corresponding asset state. In this case ERC20 tokens.
+   * A `<suggestedAssetMeta.id>:finished` hub event is fired after accepted or failure.
+   *
+   * @param suggestedAssetID - The ID of the suggestedAsset to accept.
+   */
+  async acceptWatchAsset(suggestedAssetID: string): Promise<void> {
+    const { selectedAddress } = this.config;
+    const { suggestedAssets } = this.state;
+    const index = suggestedAssets.findIndex(
+      ({ id }) => suggestedAssetID === id,
+    );
+    const suggestedAssetMeta = suggestedAssets[index];
+    try {
+      switch (suggestedAssetMeta.type) {
+        case 'ERC20':
+          const { address, symbol, decimals, image } = suggestedAssetMeta.asset;
+          await this.addToken(
+            address,
+            symbol,
+            decimals,
+            image,
+            suggestedAssetMeta?.interactingAddress || selectedAddress,
+          );
+
+          this._acceptApproval(suggestedAssetID);
+
+          const acceptedSuggestedAssetMeta = {
+            ...suggestedAssetMeta,
+            status: SuggestedAssetStatus.accepted,
+          };
+          this.hub.emit(
+            `${suggestedAssetMeta.id}:finished`,
+            acceptedSuggestedAssetMeta,
+          );
+          break;
+        default:
+          throw new Error(
+            `Asset of type ${suggestedAssetMeta.type} not supported`,
+          );
+      }
+    } catch (error) {
+      this.failSuggestedAsset(suggestedAssetMeta, error);
+
+      this._rejectApproval(suggestedAssetID);
+    }
+
+    const newSuggestedAssets = suggestedAssets.filter(
+      ({ id }) => id !== suggestedAssetID,
+    );
+    this.update({ suggestedAssets: [...newSuggestedAssets] });
+  }
+
+  /**
+   * Rejects a watchAsset request based on its ID by setting its status to "rejected"
+   * and emitting a `<suggestedAssetMeta.id>:finished` hub event.
+   *
+   * @param suggestedAssetID - The ID of the suggestedAsset to accept.
+   */
+  rejectWatchAsset(suggestedAssetID: string) {
+    const { suggestedAssets } = this.state;
+    const index = suggestedAssets.findIndex(
+      ({ id }) => suggestedAssetID === id,
+    );
+    const suggestedAssetMeta = suggestedAssets[index];
+    if (!suggestedAssetMeta) {
+      return;
+    }
+    const rejectedSuggestedAssetMeta = {
+      ...suggestedAssetMeta,
+      status: SuggestedAssetStatus.rejected,
+    };
+    this.hub.emit(
+      `${suggestedAssetMeta.id}:finished`,
+      rejectedSuggestedAssetMeta,
+    );
+    const newSuggestedAssets = suggestedAssets.filter(
+      ({ id }) => id !== suggestedAssetID,
+    );
+    this.update({ suggestedAssets: [...newSuggestedAssets] });
+
+    this._rejectApproval(suggestedAssetID);
   }
 
   /**
@@ -780,7 +824,7 @@ export class TokensController extends BaseControllerV1<
     newIgnoredTokens?: string[];
     newDetectedTokens?: Token[];
     interactingAddress?: string;
-    interactingChainId?: Hex;
+    interactingChainId?: string;
   }) {
     const {
       newTokens,
@@ -861,26 +905,60 @@ export class TokensController extends BaseControllerV1<
     this.update({ ignoredTokens: [], allIgnoredTokens: {} });
   }
 
-  async _requestApproval(suggestedAssetMeta: SuggestedAssetMeta) {
-    return this.messagingSystem.call(
-      'ApprovalController:addRequest',
-      {
-        id: suggestedAssetMeta.id,
-        origin: ORIGIN_METAMASK,
-        type: ApprovalType.WatchAsset,
-        requestData: {
+  _requestApproval(
+    suggestedAssetMeta: SuggestedAssetMeta & {
+      interactingAddress: string;
+    },
+  ) {
+    this.messagingSystem
+      .call(
+        'ApprovalController:addRequest',
+        {
           id: suggestedAssetMeta.id,
-          interactingAddress: suggestedAssetMeta.interactingAddress,
-          asset: {
-            address: suggestedAssetMeta.asset.address,
-            decimals: suggestedAssetMeta.asset.decimals,
-            symbol: suggestedAssetMeta.asset.symbol,
-            image: suggestedAssetMeta.asset.image || null,
+          origin: ORIGIN_METAMASK,
+          type: ApprovalType.WatchAsset,
+          requestData: {
+            id: suggestedAssetMeta.id,
+            interactingAddress: suggestedAssetMeta.interactingAddress,
+            asset: {
+              address: suggestedAssetMeta.asset.address,
+              decimals: suggestedAssetMeta.asset.decimals,
+              symbol: suggestedAssetMeta.asset.symbol,
+              image: suggestedAssetMeta.asset.image || null,
+            },
           },
         },
-      },
-      true,
-    );
+        true,
+      )
+      .catch(() => {
+        // Intentionally ignored as promise not currently used
+      });
+  }
+
+  _acceptApproval(approvalRequestId: string) {
+    try {
+      this.messagingSystem.call(
+        'ApprovalController:acceptRequest',
+        approvalRequestId,
+      );
+    } catch (error) {
+      console.error('Failed to accept token watch approval request', error);
+    }
+  }
+
+  _rejectApproval(approvalRequestId: string) {
+    try {
+      this.messagingSystem.call(
+        'ApprovalController:rejectRequest',
+        approvalRequestId,
+        new Error('Rejected'),
+      );
+    } catch (messageCallError) {
+      console.error(
+        'Failed to reject token watch approval request',
+        messageCallError,
+      );
+    }
   }
 }
 

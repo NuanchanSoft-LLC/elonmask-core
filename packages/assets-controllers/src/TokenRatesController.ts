@@ -1,31 +1,24 @@
-import type { BaseConfig, BaseState } from '@metamask/base-controller';
+import {
+  BaseController,
+  BaseConfig,
+  BaseState,
+} from '@metamask/base-controller';
 import {
   safelyExecute,
   handleFetch,
   toChecksumHexAddress,
   FALL_BACK_VS_CURRENCY,
-  toHex,
 } from '@metamask/controller-utils';
-import type {
-  NetworkClientId,
-  NetworkController,
-  NetworkState,
-} from '@metamask/network-controller';
-import { PollingControllerV1 } from '@metamask/polling-controller';
-import type { PreferencesState } from '@metamask/preferences-controller';
-import type { Hex } from '@metamask/utils';
-
+import type { NetworkState } from '@metamask/network-controller';
 import { fetchExchangeRate as fetchNativeExchangeRate } from './crypto-compare';
 import type { TokensState } from './TokensController';
+import type { CurrencyRateState } from './CurrencyRateController';
 
 /**
  * @type CoinGeckoResponse
  *
  * CoinGecko API response representation
  */
-// This interface was created before this ESLint rule was added.
-// Convert to a `type` in a future major version.
-// eslint-disable-next-line @typescript-eslint/consistent-type-definitions
 export interface CoinGeckoResponse {
   [address: string]: {
     [currency: string]: number;
@@ -36,9 +29,6 @@ export interface CoinGeckoResponse {
  *
  * CoinGecko supported platform API representation
  */
-// This interface was created before this ESLint rule was added.
-// Convert to a `type` in a future major version.
-// eslint-disable-next-line @typescript-eslint/consistent-type-definitions
 export interface CoinGeckoPlatform {
   id: string;
   chain_identifier: null | number;
@@ -55,9 +45,6 @@ export interface CoinGeckoPlatform {
  * @property symbol - Symbol of the token
  * @property image - Image of the token, url or bit32 image
  */
-// This interface was created before this ESLint rule was added.
-// Convert to a `type` in a future major version.
-// eslint-disable-next-line @typescript-eslint/consistent-type-definitions
 export interface Token {
   address: string;
   decimals: number;
@@ -66,7 +53,6 @@ export interface Token {
   image?: string;
   balanceError?: unknown;
   isERC721?: boolean;
-  name?: string;
 }
 
 /**
@@ -79,63 +65,37 @@ export interface Token {
  * @property tokens - List of tokens to track exchange rates for
  * @property threshold - Threshold to invalidate the supportedChains
  */
-// This interface was created before this ESLint rule was added.
-// Convert to a `type` in a future major version.
-// eslint-disable-next-line @typescript-eslint/consistent-type-definitions
 export interface TokenRatesConfig extends BaseConfig {
   interval: number;
   nativeCurrency: string;
-  chainId: Hex;
-  selectedAddress: string;
-  allTokens: { [chainId: Hex]: { [key: string]: Token[] } };
-  allDetectedTokens: { [chainId: Hex]: { [key: string]: Token[] } };
+  chainId: string;
+  tokens: Token[];
   threshold: number;
 }
 
-// This interface was created before this ESLint rule was added.
-// Convert to a `type` in a future major version.
-// eslint-disable-next-line @typescript-eslint/consistent-type-definitions
 interface ContractExchangeRates {
   [address: string]: number | undefined;
 }
 
-// This interface was created before this ESLint rule was added.
-// Convert to a `type` in a future major version.
-// eslint-disable-next-line @typescript-eslint/consistent-type-definitions
 interface SupportedChainsCache {
   timestamp: number;
   data: CoinGeckoPlatform[] | null;
 }
 
-// This interface was created before this ESLint rule was added.
-// Convert to a `type` in a future major version.
-// eslint-disable-next-line @typescript-eslint/consistent-type-definitions
 interface SupportedVsCurrenciesCache {
   timestamp: number;
   data: string[];
-}
-
-enum PollState {
-  Active = 'Active',
-  Inactive = 'Inactive',
 }
 
 /**
  * @type TokenRatesState
  *
  * Token rates controller state
- * @property contractExchangeRates - Hash of token contract addresses to exchange rates (single globally selected chain, will be deprecated soon)
- * @property contractExchangeRatesByChainId - Hash of token contract addresses to exchange rates keyed by chain ID and native currency (ticker)
+ * @property contractExchangeRates - Hash of token contract addresses to exchange rates
+ * @property supportedChains - Cached chain data
  */
-// This interface was created before this ESLint rule was added.
-// Convert to a `type` in a future major version.
-// eslint-disable-next-line @typescript-eslint/consistent-type-definitions
 export interface TokenRatesState extends BaseState {
   contractExchangeRates: ContractExchangeRates;
-  contractExchangeRatesByChainId: Record<
-    Hex,
-    Record<string, ContractExchangeRates>
-  >;
 }
 
 const CoinGeckoApi = {
@@ -159,7 +119,7 @@ const CoinGeckoApi = {
  * @returns The CoinGecko slug for the given chain ID, or `null` if the slug was not found.
  */
 function findChainSlug(
-  chainId: Hex,
+  chainId: string,
   data: CoinGeckoPlatform[] | null,
 ): string | null {
   if (!data) {
@@ -168,7 +128,7 @@ function findChainSlug(
   const chain =
     data.find(
       ({ chain_identifier }) =>
-        chain_identifier !== null && toHex(chain_identifier) === chainId,
+        chain_identifier !== null && String(chain_identifier) === chainId,
     ) ?? null;
   return chain?.id || null;
 }
@@ -177,7 +137,7 @@ function findChainSlug(
  * Controller that passively polls on a set interval for token-to-fiat exchange rates
  * for tokens stored in the TokensController
  */
-export class TokenRatesController extends PollingControllerV1<
+export class TokenRatesController extends BaseController<
   TokenRatesConfig,
   TokenRatesState
 > {
@@ -195,54 +155,32 @@ export class TokenRatesController extends PollingControllerV1<
     data: [],
   };
 
-  #pollState = PollState.Inactive;
-
   /**
    * Name of this controller used during composition
    */
   override name = 'TokenRatesController';
 
-  private readonly getNetworkClientById: NetworkController['getNetworkClientById'];
-
   /**
    * Creates a TokenRatesController instance.
    *
    * @param options - The controller options.
-   * @param options.interval - The polling interval in ms
-   * @param options.threshold - The duration in ms before metadata fetched from CoinGecko is considered stale
-   * @param options.getNetworkClientById - Gets the network client with the given id from the NetworkController.
-   * @param options.chainId - The chain ID of the current network.
-   * @param options.ticker - The ticker for the current network.
-   * @param options.selectedAddress - The current selected address.
-   * @param options.onPreferencesStateChange - Allows subscribing to preference controller state changes.
    * @param options.onTokensStateChange - Allows subscribing to token controller state changes.
+   * @param options.onCurrencyRateStateChange - Allows subscribing to currency rate controller state changes.
    * @param options.onNetworkStateChange - Allows subscribing to network state changes.
    * @param config - Initial options used to configure this controller.
    * @param state - Initial state to set on this controller.
    */
   constructor(
     {
-      interval = 3 * 60 * 1000,
-      threshold = 6 * 60 * 60 * 1000,
-      getNetworkClientById,
-      chainId: initialChainId,
-      ticker: initialTicker,
-      selectedAddress: initialSelectedAddress,
-      onPreferencesStateChange,
       onTokensStateChange,
+      onCurrencyRateStateChange,
       onNetworkStateChange,
     }: {
-      interval?: number;
-      threshold?: number;
-      getNetworkClientById: NetworkController['getNetworkClientById'];
-      chainId: Hex;
-      ticker: string;
-      selectedAddress: string;
-      onPreferencesStateChange: (
-        listener: (preferencesState: PreferencesState) => void,
-      ) => void;
       onTokensStateChange: (
         listener: (tokensState: TokensState) => void,
+      ) => void;
+      onCurrencyRateStateChange: (
+        listener: (currencyRateState: CurrencyRateState) => void,
       ) => void;
       onNetworkStateChange: (
         listener: (networkState: NetworkState) => void,
@@ -253,132 +191,95 @@ export class TokenRatesController extends PollingControllerV1<
   ) {
     super(config, state);
     this.defaultConfig = {
-      interval,
-      threshold,
       disabled: false,
-      nativeCurrency: initialTicker,
-      chainId: initialChainId,
-      selectedAddress: initialSelectedAddress,
-      allTokens: {}, // TODO: initialize these correctly, maybe as part of BaseControllerV2 migration
-      allDetectedTokens: {},
+      interval: 3 * 60 * 1000,
+      nativeCurrency: 'eth',
+      chainId: '',
+      tokens: [],
+      threshold: 6 * 60 * 60 * 1000,
     };
 
     this.defaultState = {
       contractExchangeRates: {},
-      contractExchangeRatesByChainId: {},
     };
     this.initialize();
-    this.setIntervalLength(interval);
-    this.getNetworkClientById = getNetworkClientById;
-
     if (config?.disabled) {
       this.configure({ disabled: true }, false, false);
     }
-    this.#updateTokenList();
 
-    onPreferencesStateChange(async ({ selectedAddress }) => {
-      if (this.config.selectedAddress !== selectedAddress) {
-        this.configure({ selectedAddress });
-        this.#updateTokenList();
-        if (this.#pollState === PollState.Active) {
-          await this.updateExchangeRates();
-        }
-      }
+    onTokensStateChange(({ tokens, detectedTokens }) => {
+      this.configure({ tokens: [...tokens, ...detectedTokens] });
     });
 
-    onTokensStateChange(async ({ allTokens, allDetectedTokens }) => {
-      // These two state properties are assumed to be immutable
-      if (
-        this.config.allTokens !== allTokens ||
-        this.config.allDetectedTokens !== allDetectedTokens
-      ) {
-        this.configure({ allTokens, allDetectedTokens });
-        this.#updateTokenList();
-        if (this.#pollState === PollState.Active) {
-          await this.updateExchangeRates();
-        }
-      }
+    onCurrencyRateStateChange((currencyRateState) => {
+      this.configure({ nativeCurrency: currencyRateState.nativeCurrency });
     });
 
-    onNetworkStateChange(async ({ providerConfig }) => {
-      const { chainId, ticker } = providerConfig;
-      if (
-        this.config.chainId !== chainId ||
-        this.config.nativeCurrency !== ticker
-      ) {
-        this.update({ contractExchangeRates: {} });
-        this.configure({ chainId, nativeCurrency: ticker });
-        this.#updateTokenList();
-        if (this.#pollState === PollState.Active) {
-          await this.updateExchangeRates();
-        }
-      }
+    onNetworkStateChange(({ providerConfig }) => {
+      const { chainId } = providerConfig;
+      this.update({ contractExchangeRates: {} });
+      this.configure({ chainId });
     });
-  }
-
-  #updateTokenList() {
-    const { allTokens, allDetectedTokens } = this.config;
-    const tokens =
-      allTokens[this.config.chainId]?.[this.config.selectedAddress] || [];
-    const detectedTokens =
-      allDetectedTokens[this.config.chainId]?.[this.config.selectedAddress] ||
-      [];
-    this.tokenList = [...tokens, ...detectedTokens];
+    this.poll();
   }
 
   /**
-   * Start (or restart) polling.
+   * Sets a new polling interval.
+   *
+   * @param interval - Polling interval used to fetch new token rates.
    */
-  async start() {
-    this.#stopPoll();
-    this.#pollState = PollState.Active;
-    await this.#poll();
-  }
-
-  /**
-   * Stop polling.
-   */
-  stop() {
-    this.#stopPoll();
-    this.#pollState = PollState.Inactive;
-  }
-
-  /**
-   * Clear the active polling timer, if present.
-   */
-  #stopPoll() {
-    if (this.handle) {
-      clearTimeout(this.handle);
-    }
-  }
-
-  /**
-   * Poll for exchange rate updates.
-   */
-  async #poll() {
+  async poll(interval?: number): Promise<void> {
+    interval && this.configure({ interval }, false, false);
+    this.handle && clearTimeout(this.handle);
     await safelyExecute(() => this.updateExchangeRates());
-
-    // Poll using recursive `setTimeout` instead of `setInterval` so that
-    // requests don't stack if they take longer than the polling interval
     this.handle = setTimeout(() => {
-      this.#poll();
+      this.poll(this.config.interval);
     }, this.config.interval);
+  }
+
+  /**
+   * Sets a new chainId.
+   *
+   * TODO: Replace this with a method.
+   *
+   * @param _chainId - The current chain ID.
+   */
+  set chainId(_chainId: string) {
+    !this.disabled && safelyExecute(() => this.updateExchangeRates());
+  }
+
+  get chainId() {
+    throw new Error('Property only used for setting');
+  }
+
+  /**
+   * Sets a new token list to track prices.
+   *
+   * TODO: Replace this with a method.
+   *
+   * @param tokens - List of tokens to track exchange rates for.
+   */
+  set tokens(tokens: Token[]) {
+    this.tokenList = tokens;
+    !this.disabled && safelyExecute(() => this.updateExchangeRates());
+  }
+
+  get tokens() {
+    throw new Error('Property only used for setting');
   }
 
   /**
    * Fetches a pairs of token address and native currency.
    *
-   * @param chainSlug - The chain string identifier.
-   * @param vsCurrency - The currency used to generate pairs against the tokens.
-   * @param tokenAddresses - The addresses for the token contracts.
+   * @param chainSlug - Chain string identifier.
+   * @param vsCurrency - Query according to tokens in tokenList and native currency.
    * @returns The exchange rates for the given pairs.
    */
   async fetchExchangeRate(
     chainSlug: string,
     vsCurrency: string,
-    tokenAddresses: string[] = this.tokenList.map((token) => token.address),
   ): Promise<CoinGeckoResponse> {
-    const tokenPairs = tokenAddresses.join(',');
+    const tokenPairs = this.tokenList.map((token) => token.address).join(',');
     const query = `contract_addresses=${tokenPairs}&vs_currencies=${vsCurrency.toLowerCase()}`;
     return handleFetch(CoinGeckoApi.getTokenPriceURL(chainSlug, query));
   }
@@ -387,7 +288,7 @@ export class TokenRatesController extends PollingControllerV1<
    * Checks if the current native currency is a supported vs currency to use
    * to query for token exchange rates.
    *
-   * @param nativeCurrency - The native currency to check.
+   * @param nativeCurrency - The native currency of the currently active network.
    * @returns A boolean indicating whether it's a supported vsCurrency.
    */
   private async checkIsSupportedVsCurrency(nativeCurrency: string) {
@@ -411,16 +312,13 @@ export class TokenRatesController extends PollingControllerV1<
   }
 
   /**
-   * Gets the slug from cached supported platforms CoinGecko API response for the chain ID.
+   * Gets current chain ID slug from cached supported platforms CoinGecko API response.
    * If cached supported platforms response is stale, fetches and updates it.
    *
-   * @param chainId - The chain ID.
-   * @returns The CoinGecko slug for the chain ID.
+   * @returns The CoinGecko slug for the current chain ID.
    */
-  async getChainSlug(
-    chainId: Hex = this.config.chainId,
-  ): Promise<string | null> {
-    const { threshold } = this.config;
+  async getChainSlug(): Promise<string | null> {
+    const { threshold, chainId } = this.config;
     const { data, timestamp } = this.supportedChains;
 
     const now = Date.now();
@@ -444,71 +342,22 @@ export class TokenRatesController extends PollingControllerV1<
     if (this.tokenList.length === 0 || this.disabled) {
       return;
     }
-
-    const { chainId, nativeCurrency } = this.config;
-    const tokenAddresses = this.tokenList.map((token) => token.address);
-    await this.updateExchangeRatesByChainId({
-      chainId,
-      nativeCurrency,
-      tokenAddresses,
-    });
-
-    this.update({
-      contractExchangeRates:
-        this.state.contractExchangeRatesByChainId[chainId][nativeCurrency],
-    });
-  }
-
-  /**
-   * Updates exchange rates for all tokens.
-   *
-   * @param options - The options to fetch exchange rates.
-   * @param options.chainId - The chain ID.
-   * @param options.nativeCurrency - The ticker for the chain.
-   * @param options.tokenAddresses - The addresses for the token contracts.
-   */
-  async updateExchangeRatesByChainId({
-    chainId,
-    nativeCurrency,
-    tokenAddresses,
-  }: {
-    chainId: Hex;
-    nativeCurrency: string;
-    tokenAddresses: string[];
-  }) {
-    if (!tokenAddresses.length) {
-      return;
-    }
-    const chainSlug = await this.getChainSlug(chainId);
+    const slug = await this.getChainSlug();
 
     let newContractExchangeRates: ContractExchangeRates = {};
-    if (!chainSlug) {
-      tokenAddresses.forEach((tokenAddress) => {
-        const address = toChecksumHexAddress(tokenAddress);
+    if (!slug) {
+      this.tokenList.forEach((token) => {
+        const address = toChecksumHexAddress(token.address);
         newContractExchangeRates[address] = undefined;
       });
     } else {
+      const { nativeCurrency } = this.config;
       newContractExchangeRates = await this.fetchAndMapExchangeRates(
         nativeCurrency,
-        chainSlug,
-        tokenAddresses,
+        slug,
       );
     }
-
-    const existingContractExchangeRatesForChainId =
-      this.state.contractExchangeRatesByChainId[chainId] ?? {};
-    this.update({
-      contractExchangeRatesByChainId: {
-        ...this.state.contractExchangeRatesByChainId,
-        [chainId]: {
-          ...existingContractExchangeRatesForChainId,
-          [nativeCurrency]: {
-            ...(existingContractExchangeRatesForChainId[nativeCurrency] ?? {}),
-            ...newContractExchangeRates,
-          },
-        },
-      },
-    });
+    this.update({ contractExchangeRates: newContractExchangeRates });
   }
 
   /**
@@ -517,17 +366,15 @@ export class TokenRatesController extends PollingControllerV1<
    * If not supported, it fetches contractExchange rates and maps them from token/fallback-currency
    * to token/nativeCurrency.
    *
-   * @param nativeCurrency - The native currency ticker against which to fetch exchange rates
-   * @param chainSlug - The unique slug used to id the chain by the coingecko api
+   * @param nativeCurrency - The native currency of the currently active network.
+   * @param slug - The unique slug used to id the chain by the coingecko api
    * should be used to query token exchange rates.
-   * @param tokenAddresses - The addresses for the token contracts against which to fetch exchange rates.
    * @returns An object with conversion rates for each token
    * related to the network's native currency.
    */
   async fetchAndMapExchangeRates(
     nativeCurrency: string,
-    chainSlug: string,
-    tokenAddresses: string[] = this.tokenList.map((token) => token.address),
+    slug: string,
   ): Promise<ContractExchangeRates> {
     const contractExchangeRates: ContractExchangeRates = {};
 
@@ -538,14 +385,10 @@ export class TokenRatesController extends PollingControllerV1<
 
     if (nativeCurrencySupported) {
       // If it is we can do a simple fetch against the CoinGecko API
-      const prices = await this.fetchExchangeRate(
-        chainSlug,
-        nativeCurrency,
-        tokenAddresses,
-      );
-      tokenAddresses.forEach((tokenAddress) => {
-        const price = prices[tokenAddress.toLowerCase()];
-        contractExchangeRates[toChecksumHexAddress(tokenAddress)] = price
+      const prices = await this.fetchExchangeRate(slug, nativeCurrency);
+      this.tokenList.forEach((token) => {
+        const price = prices[token.address.toLowerCase()];
+        contractExchangeRates[toChecksumHexAddress(token.address)] = price
           ? price[nativeCurrency.toLowerCase()]
           : 0;
       });
@@ -559,11 +402,7 @@ export class TokenRatesController extends PollingControllerV1<
           tokenExchangeRates,
           { conversionRate: vsCurrencyToNativeCurrencyConversionRate },
         ] = await Promise.all([
-          this.fetchExchangeRate(
-            chainSlug,
-            FALL_BACK_VS_CURRENCY,
-            tokenAddresses,
-          ),
+          this.fetchExchangeRate(slug, FALL_BACK_VS_CURRENCY),
           fetchNativeExchangeRate(nativeCurrency, FALL_BACK_VS_CURRENCY, false),
         ]);
       } catch (error) {
@@ -588,26 +427,6 @@ export class TokenRatesController extends PollingControllerV1<
     }
 
     return contractExchangeRates;
-  }
-
-  /**
-   * Updates token rates for the given networkClientId and contract addresses
-   *
-   * @param networkClientId - The network client ID used to get a ticker value.
-   * @param options - The polling options.
-   * @param options.tokenAddresses - The addresses for the token contracts.
-   * @returns The controller state.
-   */
-  async _executePoll(
-    networkClientId: NetworkClientId,
-    options: { tokenAddresses: string[] },
-  ): Promise<void> {
-    const networkClient = this.getNetworkClientById(networkClientId);
-    await this.updateExchangeRatesByChainId({
-      chainId: networkClient.configuration.chainId,
-      nativeCurrency: networkClient.configuration.ticker,
-      tokenAddresses: options.tokenAddresses,
-    });
   }
 }
 

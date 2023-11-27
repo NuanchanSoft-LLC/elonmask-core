@@ -1,14 +1,13 @@
+import nock, { Scope as NockScope } from 'nock';
+import sinon from 'sinon';
 import type { JSONRPCResponse } from '@json-rpc-specification/meta-schema';
 import type { InfuraNetworkType } from '@metamask/controller-utils';
-import { BUILT_IN_NETWORKS } from '@metamask/controller-utils';
-import EthQuery from '@metamask/eth-query';
-import type { Hex } from '@metamask/utils';
-import nock from 'nock';
-import type { Scope as NockScope } from 'nock';
-import * as sinon from 'sinon';
-
-import { createNetworkClient } from '../../src/create-network-client';
-import { NetworkClientType } from '../../src/types';
+import EthQuery from 'eth-query';
+import { Hex } from '@metamask/utils';
+import {
+  createNetworkClient,
+  NetworkClientType,
+} from '../../src/create-network-client';
 
 /**
  * A dummy value for the `infuraProjectId` option that `createInfuraClient`
@@ -44,7 +43,7 @@ const originalSetTimeout = setTimeout;
  * @param args - The arguments that `console.log` takes.
  */
 function debug(...args: any) {
-  /* eslint-disable-next-line n/no-process-env */
+  /* eslint-disable-next-line node/no-process-env */
   if (process.env.DEBUG_PROVIDER_TESTS === '1') {
     console.log(...args);
   }
@@ -285,7 +284,6 @@ export type MockOptions = {
   providerType: ProviderType;
   customRpcUrl?: string;
   customChainId?: Hex;
-  customTicker?: string;
 };
 
 export type MockCommunications = {
@@ -341,6 +339,7 @@ export async function withMockedCommunications(
     return await fn(comms);
   } finally {
     nock.isDone();
+    nock.cleanAll();
   }
 }
 
@@ -411,8 +410,6 @@ export async function waitForPromiseToBeFulfilledAfterRunningAllTimers(
  * that `providerType` is "custom".
  * @param options.customChainId - The chain id belonging to the custom RPC
  * endpoint, assuming that `providerType` is "custom" (default: "0x1").
- * @param options.customTicker - The ticker of the custom RPC endpoint, assuming
- * that `providerType` is "custom" (default: "ETH").
  * @param fn - A function which will be called with an object that allows
  * interaction with the network client.
  * @returns The return value of the given function.
@@ -423,7 +420,6 @@ export async function withNetworkClient(
     infuraNetwork = 'mainnet',
     customRpcUrl = MOCK_RPC_URL,
     customChainId = '0x1',
-    customTicker = 'ETH',
   }: MockOptions,
   fn: (client: MockNetworkClient) => Promise<any>,
 ) {
@@ -438,9 +434,9 @@ export async function withNetworkClient(
   // than it usually would to complete. Or at least it should — this doesn't
   // appear to be working correctly. Unset `IN_TEST` on `process.env` to prevent
   // this behavior.
-  /* eslint-disable-next-line n/no-process-env */
+  /* eslint-disable-next-line node/no-process-env */
   const inTest = process.env.IN_TEST;
-  /* eslint-disable-next-line n/no-process-env */
+  /* eslint-disable-next-line node/no-process-env */
   delete process.env.IN_TEST;
   const clientUnderTest =
     providerType === 'infura'
@@ -448,16 +444,13 @@ export async function withNetworkClient(
           network: infuraNetwork,
           infuraProjectId: MOCK_INFURA_PROJECT_ID,
           type: NetworkClientType.Infura,
-          chainId: BUILT_IN_NETWORKS[infuraNetwork].chainId,
-          ticker: BUILT_IN_NETWORKS[infuraNetwork].ticker,
         })
       : createNetworkClient({
           chainId: customChainId,
           rpcUrl: customRpcUrl,
           type: NetworkClientType.Custom,
-          ticker: customTicker,
         });
-  /* eslint-disable-next-line n/no-process-env */
+  /* eslint-disable-next-line node/no-process-env */
   process.env.IN_TEST = inTest;
 
   const { provider, blockTracker } = clientUnderTest;

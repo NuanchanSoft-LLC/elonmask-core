@@ -1,18 +1,15 @@
-import type {
-  BaseState,
-  RestrictedControllerMessenger,
-} from '@metamask/base-controller';
+import * as sinon from 'sinon';
+import type { Patch } from 'immer';
 import {
   BaseController,
-  BaseControllerV1,
+  BaseState,
+  BaseControllerV2,
   ControllerMessenger,
+  RestrictedControllerMessenger,
 } from '@metamask/base-controller';
-import type { Patch } from 'immer';
-import * as sinon from 'sinon';
-
 import { ComposableController } from './ComposableController';
 
-// Mock BaseController classes
+// Mock BaseControllerV2 classes
 
 type FooControllerState = {
   foo: string;
@@ -37,7 +34,7 @@ const fooControllerStateMetadata = {
   },
 };
 
-class FooController extends BaseController<
+class FooController extends BaseControllerV2<
   'FooController',
   FooControllerState,
   FooMessenger
@@ -58,13 +55,12 @@ class FooController extends BaseController<
   }
 }
 
-// Mock BaseControllerV1 classes
+// Mock BaseController classes
 
-type BarControllerState = BaseState & {
+interface BarControllerState extends BaseState {
   bar: string;
-};
-
-class BarController extends BaseControllerV1<never, BarControllerState> {
+}
+class BarController extends BaseController<never, BarControllerState> {
   defaultState = {
     bar: 'bar',
   };
@@ -81,11 +77,10 @@ class BarController extends BaseControllerV1<never, BarControllerState> {
   }
 }
 
-type BazControllerState = BaseState & {
+interface BazControllerState extends BaseState {
   baz: string;
-};
-
-class BazController extends BaseControllerV1<never, BazControllerState> {
+}
+class BazController extends BaseController<never, BazControllerState> {
   defaultState = {
     baz: 'baz',
   };
@@ -103,7 +98,7 @@ describe('ComposableController', () => {
     sinon.restore();
   });
 
-  describe('BaseControllerV1', () => {
+  describe('BaseController', () => {
     it('should compose controller state', () => {
       const composableMessenger = new ControllerMessenger().getRestricted<
         'ComposableController',
@@ -264,7 +259,7 @@ describe('ComposableController', () => {
     });
   });
 
-  describe('Mixed BaseControllerV1 and BaseControllerV2', () => {
+  describe('Mixed BaseController and BaseControllerV2', () => {
     it('should compose controller state', () => {
       const barController = new BarController();
       const controllerMessenger = new ControllerMessenger<
@@ -329,7 +324,7 @@ describe('ComposableController', () => {
       });
     });
 
-    it('should notify listeners of BaseControllerV1 state change', () => {
+    it('should notify listeners of BaseController state change', () => {
       const barController = new BarController();
       const controllerMessenger = new ControllerMessenger<
         never,
@@ -430,7 +425,7 @@ describe('ComposableController', () => {
       expect(
         () => new ComposableController([barController, fooController]),
       ).toThrow(
-        'Messaging system required if any BaseController controllers are used',
+        'Messaging system required if any BaseControllerV2 controllers are used',
       );
     });
   });

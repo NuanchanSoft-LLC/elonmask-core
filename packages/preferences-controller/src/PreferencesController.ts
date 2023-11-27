@@ -1,8 +1,9 @@
-import type { BaseConfig, BaseState } from '@metamask/base-controller';
-import { BaseControllerV1 } from '@metamask/base-controller';
+import {
+  BaseController,
+  BaseConfig,
+  BaseState,
+} from '@metamask/base-controller';
 import { toChecksumHexAddress } from '@metamask/controller-utils';
-
-import { ETHERSCAN_SUPPORTED_CHAIN_IDS } from './constants';
 
 /**
  * ContactEntry representation.
@@ -11,20 +12,11 @@ import { ETHERSCAN_SUPPORTED_CHAIN_IDS } from './constants';
  * @property name - Nickname associated with this address
  * @property importTime - Data time when an account as created/imported
  */
-// This interface was created before this ESLint rule was added.
-// Convert to a `type` in a future major version.
-// eslint-disable-next-line @typescript-eslint/consistent-type-definitions
 export interface ContactEntry {
   address: string;
   name: string;
   importTime?: number;
 }
-
-export type EtherscanSupportedChains =
-  keyof typeof ETHERSCAN_SUPPORTED_CHAIN_IDS;
-
-export type EtherscanSupportedHexChainId =
-  (typeof ETHERSCAN_SUPPORTED_CHAIN_IDS)[EtherscanSupportedChains];
 
 /**
  * @type PreferencesState
@@ -35,9 +27,6 @@ export type EtherscanSupportedHexChainId =
  * @property lostIdentities - Map of lost addresses to ContactEntry objects
  * @property selectedAddress - Current coinbase account
  */
-// This interface was created before this ESLint rule was added.
-// Convert to a `type` in a future major version.
-// eslint-disable-next-line @typescript-eslint/consistent-type-definitions
 export interface PreferencesState extends BaseState {
   featureFlags: { [feature: string]: boolean };
   ipfsGateway: string;
@@ -47,22 +36,15 @@ export interface PreferencesState extends BaseState {
   useTokenDetection: boolean;
   useNftDetection: boolean;
   openSeaEnabled: boolean;
-  securityAlertsEnabled: boolean;
-  isMultiAccountBalancesEnabled: boolean;
   disabledRpcMethodPreferences: {
     [methodName: string]: boolean;
-  };
-  showTestNetworks: boolean;
-  isIpfsGatewayEnabled: boolean;
-  showIncomingTransactions: {
-    [chainId in EtherscanSupportedHexChainId]: boolean;
   };
 }
 
 /**
  * Controller that stores shared settings and exposes convenience methods
  */
-export class PreferencesController extends BaseControllerV1<
+export class PreferencesController extends BaseController<
   BaseConfig,
   PreferencesState
 > {
@@ -88,33 +70,8 @@ export class PreferencesController extends BaseControllerV1<
       useTokenDetection: true,
       useNftDetection: false,
       openSeaEnabled: false,
-      securityAlertsEnabled: false,
-      isMultiAccountBalancesEnabled: true,
       disabledRpcMethodPreferences: {
         eth_sign: false,
-      },
-      showTestNetworks: false,
-      isIpfsGatewayEnabled: true,
-      showIncomingTransactions: {
-        [ETHERSCAN_SUPPORTED_CHAIN_IDS.MAINNET]: true,
-        [ETHERSCAN_SUPPORTED_CHAIN_IDS.GOERLI]: true,
-        [ETHERSCAN_SUPPORTED_CHAIN_IDS.BSC]: true,
-        [ETHERSCAN_SUPPORTED_CHAIN_IDS.BSC_TESTNET]: true,
-        [ETHERSCAN_SUPPORTED_CHAIN_IDS.OPTIMISM]: true,
-        [ETHERSCAN_SUPPORTED_CHAIN_IDS.OPTIMISM_TESTNET]: true,
-        [ETHERSCAN_SUPPORTED_CHAIN_IDS.POLYGON]: true,
-        [ETHERSCAN_SUPPORTED_CHAIN_IDS.POLYGON_TESTNET]: true,
-        [ETHERSCAN_SUPPORTED_CHAIN_IDS.AVALANCHE]: true,
-        [ETHERSCAN_SUPPORTED_CHAIN_IDS.AVALANCHE_TESTNET]: true,
-        [ETHERSCAN_SUPPORTED_CHAIN_IDS.FANTOM]: true,
-        [ETHERSCAN_SUPPORTED_CHAIN_IDS.FANTOM_TESTNET]: true,
-        [ETHERSCAN_SUPPORTED_CHAIN_IDS.SEPOLIA]: true,
-        [ETHERSCAN_SUPPORTED_CHAIN_IDS.LINEA_GOERLI]: true,
-        [ETHERSCAN_SUPPORTED_CHAIN_IDS.LINEA_MAINNET]: true,
-        [ETHERSCAN_SUPPORTED_CHAIN_IDS.MOONBEAM]: true,
-        [ETHERSCAN_SUPPORTED_CHAIN_IDS.MOONBEAM_TESTNET]: true,
-        [ETHERSCAN_SUPPORTED_CHAIN_IDS.MOONRIVER]: true,
-        [ETHERSCAN_SUPPORTED_CHAIN_IDS.GNOSIS]: true,
       },
     };
     this.initialize();
@@ -200,15 +157,17 @@ export class PreferencesController extends BaseControllerV1<
     const { identities, lostIdentities } = this.state;
     const newlyLost: { [address: string]: ContactEntry } = {};
 
-    for (const [address, identity] of Object.entries(identities)) {
-      if (!addresses.includes(address)) {
-        newlyLost[address] = identity;
-        delete identities[address];
+    for (const identity in identities) {
+      if (addresses.indexOf(identity) === -1) {
+        newlyLost[identity] = identities[identity];
+        delete identities[identity];
       }
     }
 
-    for (const [address, identity] of Object.entries(newlyLost)) {
-      lostIdentities[address] = identity;
+    if (Object.keys(newlyLost).length > 0) {
+      for (const key in newlyLost) {
+        lostIdentities[key] = newlyLost[key];
+      }
     }
 
     this.update({
@@ -217,7 +176,7 @@ export class PreferencesController extends BaseControllerV1<
     });
     this.addIdentities(addresses);
 
-    if (!addresses.includes(this.state.selectedAddress)) {
+    if (addresses.indexOf(this.state.selectedAddress) === -1) {
       this.update({ selectedAddress: addresses[0] });
     }
 
@@ -308,15 +267,6 @@ export class PreferencesController extends BaseControllerV1<
   }
 
   /**
-   * Toggle the security alert enabled setting.
-   *
-   * @param securityAlertsEnabled - Boolean indicating user preference on using security alerts.
-   */
-  setSecurityAlertsEnabled(securityAlertsEnabled: boolean) {
-    this.update({ securityAlertsEnabled });
-  }
-
-  /**
    * A setter for the user preferences to enable/disable rpc methods.
    *
    * @param methodName - The RPC method name to change the setting of.
@@ -329,53 +279,6 @@ export class PreferencesController extends BaseControllerV1<
       [methodName]: isEnabled,
     };
     this.update({ disabledRpcMethodPreferences: newDisabledRpcMethods });
-  }
-
-  /**
-   * A setter for the user preferences to enable/disable fetch of multiple accounts balance.
-   *
-   * @param isMultiAccountBalancesEnabled - true to enable multiple accounts balance fetch, false to fetch only selectedAddress.
-   */
-  setIsMultiAccountBalancesEnabled(isMultiAccountBalancesEnabled: boolean) {
-    this.update({ isMultiAccountBalancesEnabled });
-  }
-
-  /**
-   * A setter for the user have the test networks visible/hidden.
-   *
-   * @param showTestNetworks - true to show test networks, false to hidden.
-   */
-  setShowTestNetworks(showTestNetworks: boolean) {
-    this.update({ showTestNetworks });
-  }
-
-  /**
-   * A setter for the user allow to be fetched IPFS content
-   *
-   * @param isIpfsGatewayEnabled - true to enable ipfs source
-   */
-  setIsIpfsGatewayEnabled(isIpfsGatewayEnabled: boolean) {
-    this.update({ isIpfsGatewayEnabled });
-  }
-
-  /**
-   * A setter for the user allow to be fetched IPFS content
-   *
-   * @param chainId - On hexadecimal format to enable the incoming transaction network
-   * @param isIncomingTransactionNetworkEnable - true to enable incoming transactions
-   */
-  setEnableNetworkIncomingTransactions(
-    chainId: EtherscanSupportedHexChainId,
-    isIncomingTransactionNetworkEnable: boolean,
-  ) {
-    if (Object.values(ETHERSCAN_SUPPORTED_CHAIN_IDS).includes(chainId)) {
-      this.update({
-        showIncomingTransactions: {
-          ...this.state.showIncomingTransactions,
-          [chainId]: isIncomingTransactionNetworkEnable,
-        },
-      });
-    }
   }
 }
 

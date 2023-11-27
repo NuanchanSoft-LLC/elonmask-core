@@ -1,12 +1,10 @@
-import type {
-  ControllerGetStateAction,
-  ControllerStateChangeEvent,
+import type { Patch } from 'immer';
+import { Json } from '@metamask/types';
+import {
+  BaseControllerV2,
   RestrictedControllerMessenger,
 } from '@metamask/base-controller';
-import { BaseController } from '@metamask/base-controller';
-import type { Json } from '@metamask/utils';
-
-import type {
+import {
   GenericPermissionController,
   HasPermissions,
   PermissionSubjectMetadata,
@@ -56,10 +54,10 @@ const defaultState: SubjectMetadataControllerState = {
   subjectMetadata: {},
 };
 
-export type GetSubjectMetadataState = ControllerGetStateAction<
-  typeof controllerName,
-  SubjectMetadataControllerState
->;
+export type GetSubjectMetadataState = {
+  type: `${typeof controllerName}:getState`;
+  handler: () => SubjectMetadataControllerState;
+};
 
 export type GetSubjectMetadata = {
   type: `${typeof controllerName}:getSubjectMetadata`;
@@ -70,10 +68,10 @@ export type SubjectMetadataControllerActions =
   | GetSubjectMetadataState
   | GetSubjectMetadata;
 
-export type SubjectMetadataStateChange = ControllerStateChangeEvent<
-  typeof controllerName,
-  SubjectMetadataControllerState
->;
+export type SubjectMetadataStateChange = {
+  type: `${typeof controllerName}:stateChange`;
+  payload: [SubjectMetadataControllerState, Patch[]];
+};
 
 export type SubjectMetadataControllerEvents = SubjectMetadataStateChange;
 
@@ -97,16 +95,16 @@ type SubjectMetadataControllerOptions = {
  * A controller for storing metadata associated with permission subjects. More
  * or less, a cache.
  */
-export class SubjectMetadataController extends BaseController<
+export class SubjectMetadataController extends BaseControllerV2<
   typeof controllerName,
   SubjectMetadataControllerState,
   SubjectMetadataControllerMessenger
 > {
-  private readonly subjectCacheLimit: number;
+  private subjectCacheLimit: number;
 
-  private readonly subjectsWithoutPermissionsEncounteredSinceStartup: Set<string>;
+  private subjectsWithoutPermissionsEncounteredSinceStartup: Set<string>;
 
-  private readonly subjectHasPermissions: GenericPermissionController['hasPermissions'];
+  private subjectHasPermissions: GenericPermissionController['hasPermissions'];
 
   constructor({
     messenger,

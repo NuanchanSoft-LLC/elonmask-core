@@ -1,14 +1,11 @@
+import { Json } from '@metamask/controller-utils';
 import { ControllerMessenger } from '@metamask/base-controller';
-import type { Json } from '@metamask/utils';
-
-import type { HasPermissions } from './PermissionController';
-import type {
+import { HasPermissions } from './PermissionController';
+import {
+  SubjectMetadataController,
   SubjectMetadataControllerActions,
   SubjectMetadataControllerEvents,
   SubjectMetadataControllerMessenger,
-} from './SubjectMetadataController';
-import {
-  SubjectMetadataController,
   SubjectType,
 } from './SubjectMetadataController';
 
@@ -34,11 +31,14 @@ function getSubjectMetadataControllerMessenger() {
   return [
     controllerMessenger.getRestricted<
       typeof controllerName,
-      HasPermissions['type'],
-      never
+      SubjectMetadataControllerActions['type'] | HasPermissions['type'],
+      SubjectMetadataControllerEvents['type']
     >({
       name: controllerName,
-      allowedActions: ['PermissionController:hasPermissions'],
+      allowedActions: [
+        'PermissionController:hasPermissions',
+        'SubjectMetadataController:getState',
+      ],
     }) as SubjectMetadataControllerMessenger,
     hasPermissionsSpy,
   ] as const;

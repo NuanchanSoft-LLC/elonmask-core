@@ -1,24 +1,29 @@
-import { NetworksTicker, toHex } from '@metamask/controller-utils';
+import * as sinon from 'sinon';
 import nock from 'nock';
-import { useFakeTimers } from 'sinon';
-
-import { advanceTime } from '../../../tests/helpers';
+import { PreferencesController } from '@metamask/preferences-controller';
+import {
+  NetworkController,
+  NetworkControllerMessenger,
+} from '@metamask/network-controller';
+import { ControllerMessenger } from '@metamask/base-controller';
 import { TokenRatesController } from './TokenRatesController';
+import {
+  TokensController,
+  TokensControllerMessenger,
+} from './TokensController';
 
 const COINGECKO_API = 'https://api.coingecko.com/api/v3';
 const COINGECKO_ETH_PATH = '/simple/token_price/ethereum';
+const COINGECKO_BSC_PATH = '/simple/token_price/binance-smart-chain';
 const COINGECKO_MATIC_PATH = '/simple/token_price/polygon-pos-network';
 const COINGECKO_ASSETS_PATH = '/asset_platforms';
 const COINGECKO_SUPPORTED_CURRENCIES = '/simple/supported_vs_currencies';
 const ADDRESS = '0x01';
 
-const defaultSelectedAddress = '0x0000000000000000000000000000000000000001';
-
 describe('TokenRatesController', () => {
+  let messenger: NetworkControllerMessenger;
   beforeEach(() => {
     nock(COINGECKO_API)
-      .get(COINGECKO_SUPPORTED_CURRENCIES)
-      .reply(200, ['eth', 'usd', 'dai'])
       .get(COINGECKO_ASSETS_PATH)
       .reply(200, [
         {
@@ -39,1299 +44,491 @@ describe('TokenRatesController', () => {
           name: 'Polygon',
           shortname: 'MATIC',
         },
-      ]);
+      ])
+      .get(
+        `${COINGECKO_ETH_PATH}?contract_addresses=0x89d24A6b4CcB1B6fAA2625fE562bDD9a23260359,${ADDRESS}&vs_currencies=eth`,
+      )
+      .reply(200, {
+        '0x89d24a6b4ccb1b6faa2625fe562bdd9a23260359': { eth: 0.00561045 },
+      })
+      .get(
+        `${COINGECKO_ETH_PATH}?contract_addresses=${ADDRESS}&vs_currencies=eth`,
+      )
+      .reply(200, {})
+      .get(`${COINGECKO_ETH_PATH}?contract_addresses=bar&vs_currencies=eth`)
+      .reply(200, {})
+      .get(
+        `${COINGECKO_ETH_PATH}?contract_addresses=${ADDRESS}&vs_currencies=gno`,
+      )
+      .reply(200, {})
+      .get(
+        `${COINGECKO_BSC_PATH}?contract_addresses=0x89d24A6b4CcB1B6fAA2625fE562bDD9a23260359,${ADDRESS}&vs_currencies=eth`,
+      )
+      .reply(200, {
+        '0x89d24a6b4ccb1b6faa2625fe562bdd9a23260359': { eth: 0.00561045 },
+      })
+      .get(`${COINGECKO_BSC_PATH}?contract_addresses=0xfoO&vs_currencies=eth`)
+      .reply(200, {})
+      .get(`${COINGECKO_BSC_PATH}?contract_addresses=bar&vs_currencies=eth`)
+      .reply(200, {})
+      .get(`${COINGECKO_BSC_PATH}?contract_addresses=0xfoO&vs_currencies=gno`)
+      .reply(200, {})
+      .get(COINGECKO_SUPPORTED_CURRENCIES)
+      .reply(200, ['eth', 'usd'])
+      .get(COINGECKO_ASSETS_PATH)
+      .reply(200, [
+        {
+          id: 'binance-smart-chain',
+          chain_identifier: 56,
+          name: 'Binance Smart Chain',
+          shortname: 'BSC',
+        },
+        {
+          id: 'ethereum',
+          chain_identifier: 1,
+          name: 'Ethereum',
+          shortname: '',
+        },
+        {
+          id: 'polygon-pos-network',
+          chain_identifier: 137,
+          name: 'Polygon',
+          shortname: 'MATIC',
+        },
+      ])
+      .persist();
 
     nock('https://min-api.cryptocompare.com')
-      .get('/data/price?fsym=ETH&tsyms=ETH')
-      .reply(200, { ETH: 1 });
+      .get('/data/price?fsym=ETH&tsyms=USD')
+      .reply(200, { USD: 179.63 })
+      .persist();
+
+    messenger = new ControllerMessenger().getRestricted({
+      name: 'NetworkController',
+      allowedEvents: ['NetworkController:stateChange'],
+      allowedActions: [],
+    });
   });
 
   afterEach(() => {
-    jest.restoreAllMocks();
+    nock.cleanAll();
+    sinon.restore();
+    messenger.clearEventSubscriptions('NetworkController:stateChange');
   });
 
-  describe('constructor', () => {
-    let clock: sinon.SinonFakeTimers;
-
-    beforeEach(() => {
-      clock = useFakeTimers({ now: Date.now() });
+  it('should set default state', () => {
+    const controller = new TokenRatesController({
+      onTokensStateChange: sinon.stub(),
+      onCurrencyRateStateChange: sinon.stub(),
+      onNetworkStateChange: sinon.stub(),
     });
-
-    afterEach(() => {
-      clock.restore();
+    expect(controller.state).toStrictEqual({
+      contractExchangeRates: {},
     });
+  });
 
-    it('should set default state', () => {
-      const controller = new TokenRatesController({
-        getNetworkClientById: jest.fn(),
-        chainId: '0x1',
-        ticker: NetworksTicker.mainnet,
-        selectedAddress: defaultSelectedAddress,
-        onPreferencesStateChange: jest.fn(),
+  it('should initialize with the default config', () => {
+    const controller = new TokenRatesController({
+      onTokensStateChange: sinon.stub(),
+      onCurrencyRateStateChange: sinon.stub(),
+      onNetworkStateChange: sinon.stub(),
+    });
+    expect(controller.config).toStrictEqual({
+      disabled: false,
+      interval: 180000,
+      nativeCurrency: 'eth',
+      chainId: '',
+      tokens: [],
+      threshold: 21600000,
+    });
+  });
+
+  it('should throw when tokens property is accessed', () => {
+    const controller = new TokenRatesController({
+      onTokensStateChange: sinon.stub(),
+      onCurrencyRateStateChange: sinon.stub(),
+      onNetworkStateChange: sinon.stub(),
+    });
+    expect(() => console.log(controller.tokens)).toThrow(
+      'Property only used for setting',
+    );
+  });
+
+  it('should poll and update rate in the right interval', async () => {
+    const pollSpy = jest.spyOn(TokenRatesController.prototype, 'poll');
+    const interval = 100;
+    const times = 5;
+    new TokenRatesController(
+      {
         onTokensStateChange: jest.fn(),
+        onCurrencyRateStateChange: jest.fn(),
         onNetworkStateChange: jest.fn(),
-      });
-      expect(controller.state).toStrictEqual({
-        contractExchangeRates: {},
-        contractExchangeRatesByChainId: {},
-      });
-    });
-
-    it('should initialize with the default config', () => {
-      const controller = new TokenRatesController({
-        getNetworkClientById: jest.fn(),
-        chainId: '0x1',
-        ticker: NetworksTicker.mainnet,
-        selectedAddress: defaultSelectedAddress,
-        onPreferencesStateChange: jest.fn(),
-        onTokensStateChange: jest.fn(),
-        onNetworkStateChange: jest.fn(),
-      });
-      expect(controller.config).toStrictEqual({
-        interval: 180000,
-        threshold: 21600000,
-        allDetectedTokens: {},
-        allTokens: {},
-        disabled: false,
-        nativeCurrency: NetworksTicker.mainnet,
-        chainId: '0x1',
-        selectedAddress: defaultSelectedAddress,
-      });
-    });
-
-    it('should not poll by default', async () => {
-      const fetchSpy = jest.spyOn(globalThis, 'fetch');
-      new TokenRatesController({
-        interval: 100,
-        getNetworkClientById: jest.fn(),
-        chainId: '0x1',
-        ticker: NetworksTicker.mainnet,
-        selectedAddress: defaultSelectedAddress,
-        onPreferencesStateChange: jest.fn(),
-        onTokensStateChange: jest.fn(),
-        onNetworkStateChange: jest.fn(),
-      });
-
-      await advanceTime({ clock, duration: 500 });
-
-      expect(fetchSpy).not.toHaveBeenCalled();
-    });
-  });
-
-  describe('TokensController::stateChange', () => {
-    let clock: sinon.SinonFakeTimers;
-
-    beforeEach(() => {
-      clock = useFakeTimers({ now: Date.now() });
-    });
-
-    afterEach(() => {
-      clock.restore();
-    });
-
-    describe('when polling is active', () => {
-      it('should update exchange rates when tokens change', async () => {
-        let tokenStateChangeListener: (state: any) => Promise<void>;
-        const onTokensStateChange = jest.fn().mockImplementation((listener) => {
-          tokenStateChangeListener = listener;
-        });
-        const controller = new TokenRatesController(
-          {
-            interval: 100,
-            getNetworkClientById: jest.fn(),
-            chainId: '0x1',
-            ticker: NetworksTicker.mainnet,
-            selectedAddress: defaultSelectedAddress,
-            onPreferencesStateChange: jest.fn(),
-            onTokensStateChange,
-            onNetworkStateChange: jest.fn(),
-          },
-          {
-            allTokens: {
-              '0x1': {
-                [defaultSelectedAddress]: [
-                  { address: 'bar', decimals: 0, symbol: '', aggregators: [] },
-                ],
-              },
-            },
-          },
-        );
-        await controller.start();
-        const updateExchangeRatesSpy = jest
-          .spyOn(controller, 'updateExchangeRates')
-          .mockResolvedValue();
-
-        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-        await tokenStateChangeListener!({
-          allDetectedTokens: {},
-          allTokens: {
-            '0x1': {
-              [defaultSelectedAddress]: [
-                { address: 'foo', decimals: 0, symbol: '', aggregators: [] },
-              ],
-            },
-          },
-        });
-
-        expect(updateExchangeRatesSpy).toHaveBeenCalledTimes(1);
-      });
-
-      it('should not update exchange rates when token state changes without "all tokens" or "all detected tokens" changing', async () => {
-        let tokenStateChangeListener: (state: any) => Promise<void>;
-        const onTokensStateChange = jest.fn().mockImplementation((listener) => {
-          tokenStateChangeListener = listener;
-        });
-
-        const allTokens = {
-          '0x1': {
-            [defaultSelectedAddress]: [
-              { address: 'foo', decimals: 0, symbol: '', aggregators: [] },
-            ],
-          },
-        };
-        const allDetectedTokens = {};
-
-        const controller = new TokenRatesController(
-          {
-            interval: 100,
-            getNetworkClientById: jest.fn(),
-            chainId: '0x1',
-            ticker: NetworksTicker.mainnet,
-            selectedAddress: defaultSelectedAddress,
-            onPreferencesStateChange: jest.fn(),
-            onTokensStateChange,
-            onNetworkStateChange: jest.fn(),
-          },
-          {
-            allDetectedTokens,
-            allTokens,
-          },
-        );
-
-        await controller.start();
-        const updateExchangeRatesSpy = jest
-          .spyOn(controller, 'updateExchangeRates')
-          .mockResolvedValue();
-
-        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-        await tokenStateChangeListener!({
-          allDetectedTokens,
-          allTokens,
-          tokens: [
-            { address: 'bar', decimals: 0, symbol: '', aggregators: [] },
-          ],
-        });
-
-        expect(updateExchangeRatesSpy).not.toHaveBeenCalled();
-      });
-    });
-
-    describe('when polling is inactive', () => {
-      it('should not update exchange rates when tokens change', async () => {
-        let tokenStateChangeListener: (state: any) => Promise<void>;
-        const onTokensStateChange = jest.fn().mockImplementation((listener) => {
-          tokenStateChangeListener = listener;
-        });
-        const controller = new TokenRatesController(
-          {
-            interval: 100,
-            getNetworkClientById: jest.fn(),
-            chainId: '0x1',
-            ticker: NetworksTicker.mainnet,
-            selectedAddress: defaultSelectedAddress,
-            onPreferencesStateChange: jest.fn(),
-            onTokensStateChange,
-            onNetworkStateChange: jest.fn(),
-          },
-          {
-            allTokens: {
-              '0x1': {
-                [defaultSelectedAddress]: [
-                  { address: 'bar', decimals: 0, symbol: '', aggregators: [] },
-                ],
-              },
-            },
-          },
-        );
-        const updateExchangeRatesSpy = jest
-          .spyOn(controller, 'updateExchangeRates')
-          .mockResolvedValue();
-
-        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-        await tokenStateChangeListener!({
-          allDetectedTokens: {},
-          allTokens: {
-            '0x1': {
-              [defaultSelectedAddress]: [
-                { address: 'foo', decimals: 0, symbol: '', aggregators: [] },
-              ],
-            },
-          },
-        });
-
-        expect(updateExchangeRatesSpy).not.toHaveBeenCalled();
-      });
-
-      it('should not update exchange rates when detectedtokens change', async () => {
-        let tokenStateChangeListener: (state: any) => Promise<void>;
-        const onTokensStateChange = jest.fn().mockImplementation((listener) => {
-          tokenStateChangeListener = listener;
-        });
-        const controller = new TokenRatesController(
-          {
-            interval: 100,
-            getNetworkClientById: jest.fn(),
-            chainId: '0x1',
-            ticker: NetworksTicker.mainnet,
-            selectedAddress: defaultSelectedAddress,
-            onPreferencesStateChange: jest.fn(),
-            onTokensStateChange,
-            onNetworkStateChange: jest.fn(),
-          },
-          {
-            allDetectedTokens: {
-              [toHex(1)]: {
-                [defaultSelectedAddress]: [
-                  { address: 'bar', decimals: 0, symbol: '', aggregators: [] },
-                ],
-              },
-            },
-            allTokens: {},
-          },
-        );
-        const updateExchangeRatesSpy = jest
-          .spyOn(controller, 'updateExchangeRates')
-          .mockResolvedValue();
-
-        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-        await tokenStateChangeListener!({
-          allDetectedTokens: {
-            [toHex(1)]: {
-              [defaultSelectedAddress]: [
-                { address: 'foo', decimals: 0, symbol: '', aggregators: [] },
-              ],
-            },
-          },
-          allTokens: {},
-        });
-
-        expect(updateExchangeRatesSpy).not.toHaveBeenCalled();
-      });
-    });
-  });
-
-  describe('NetworkController::stateChange', () => {
-    let clock: sinon.SinonFakeTimers;
-
-    beforeEach(() => {
-      clock = useFakeTimers({ now: Date.now() });
-    });
-
-    afterEach(() => {
-      clock.restore();
-    });
-
-    describe('when polling is active', () => {
-      it('should update exchange rates when ticker changes', async () => {
-        let networkStateChangeListener: (state: any) => Promise<void>;
-        const onNetworkStateChange = jest
-          .fn()
-          .mockImplementation((listener) => {
-            networkStateChangeListener = listener;
-          });
-        const controller = new TokenRatesController({
-          interval: 100,
-          getNetworkClientById: jest.fn(),
-          chainId: toHex(1337),
-          ticker: 'TEST',
-          selectedAddress: defaultSelectedAddress,
-          onPreferencesStateChange: jest.fn(),
-          onTokensStateChange: jest.fn(),
-          onNetworkStateChange,
-        });
-        await controller.start();
-        const updateExchangeRatesSpy = jest
-          .spyOn(controller, 'updateExchangeRates')
-          .mockResolvedValue();
-
-        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-        await networkStateChangeListener!({
-          providerConfig: { chainId: toHex(1337), ticker: 'NEW' },
-        });
-
-        expect(updateExchangeRatesSpy).toHaveBeenCalledTimes(1);
-      });
-
-      it('should update exchange rates when chain ID changes', async () => {
-        let networkStateChangeListener: (state: any) => Promise<void>;
-        const onNetworkStateChange = jest
-          .fn()
-          .mockImplementation((listener) => {
-            networkStateChangeListener = listener;
-          });
-        const controller = new TokenRatesController({
-          interval: 100,
-          getNetworkClientById: jest.fn(),
-          chainId: toHex(1337),
-          ticker: 'TEST',
-          selectedAddress: defaultSelectedAddress,
-          onPreferencesStateChange: jest.fn(),
-          onTokensStateChange: jest.fn(),
-          onNetworkStateChange,
-        });
-        await controller.start();
-        const updateExchangeRatesSpy = jest
-          .spyOn(controller, 'updateExchangeRates')
-          .mockResolvedValue();
-
-        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-        await networkStateChangeListener!({
-          providerConfig: { chainId: toHex(1338), ticker: 'TEST' },
-        });
-
-        expect(updateExchangeRatesSpy).toHaveBeenCalledTimes(1);
-      });
-
-      it('should clear contractExchangeRates state when ticker changes', async () => {
-        let networkStateChangeListener: (state: any) => Promise<void>;
-        const onNetworkStateChange = jest
-          .fn()
-          .mockImplementation((listener) => {
-            networkStateChangeListener = listener;
-          });
-        const controller = new TokenRatesController({
-          interval: 100,
-          getNetworkClientById: jest.fn(),
-          chainId: toHex(1337),
-          ticker: 'TEST',
-          selectedAddress: defaultSelectedAddress,
-          onPreferencesStateChange: jest.fn(),
-          onTokensStateChange: jest.fn(),
-          onNetworkStateChange,
-        });
-        await controller.start();
-        jest.spyOn(controller, 'updateExchangeRates').mockResolvedValue();
-
-        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-        await networkStateChangeListener!({
-          providerConfig: { chainId: toHex(1337), ticker: 'NEW' },
-        });
-
-        expect(controller.state.contractExchangeRates).toStrictEqual({});
-      });
-
-      it('should clear contractExchangeRates state when chain ID changes', async () => {
-        let networkStateChangeListener: (state: any) => Promise<void>;
-        const onNetworkStateChange = jest
-          .fn()
-          .mockImplementation((listener) => {
-            networkStateChangeListener = listener;
-          });
-        const controller = new TokenRatesController({
-          interval: 100,
-          getNetworkClientById: jest.fn(),
-          chainId: toHex(1337),
-          ticker: 'TEST',
-          selectedAddress: defaultSelectedAddress,
-          onPreferencesStateChange: jest.fn(),
-          onTokensStateChange: jest.fn(),
-          onNetworkStateChange,
-        });
-        await controller.start();
-        jest.spyOn(controller, 'updateExchangeRates').mockResolvedValue();
-
-        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-        await networkStateChangeListener!({
-          providerConfig: { chainId: toHex(1338), ticker: 'TEST' },
-        });
-
-        expect(controller.state.contractExchangeRates).toStrictEqual({});
-      });
-
-      it('should not update exchange rates when network state changes without a ticker/chain id change', async () => {
-        let networkStateChangeListener: (state: any) => Promise<void>;
-        const onNetworkStateChange = jest
-          .fn()
-          .mockImplementation((listener) => {
-            networkStateChangeListener = listener;
-          });
-        const controller = new TokenRatesController({
-          interval: 100,
-          getNetworkClientById: jest.fn(),
-          chainId: toHex(1337),
-          ticker: 'TEST',
-          selectedAddress: defaultSelectedAddress,
-          onPreferencesStateChange: jest.fn(),
-          onTokensStateChange: jest.fn(),
-          onNetworkStateChange,
-        });
-        await controller.start();
-        const updateExchangeRatesSpy = jest
-          .spyOn(controller, 'updateExchangeRates')
-          .mockResolvedValue();
-
-        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-        await networkStateChangeListener!({
-          providerConfig: { chainId: toHex(1337), ticker: 'TEST' },
-        });
-
-        expect(updateExchangeRatesSpy).not.toHaveBeenCalled();
-      });
-    });
-
-    describe('when polling is inactive', () => {
-      it('should not update exchange rates when ticker changes', async () => {
-        let networkStateChangeListener: (state: any) => Promise<void>;
-        const onNetworkStateChange = jest
-          .fn()
-          .mockImplementation((listener) => {
-            networkStateChangeListener = listener;
-          });
-        const controller = new TokenRatesController({
-          interval: 100,
-          getNetworkClientById: jest.fn(),
-          chainId: toHex(1337),
-          ticker: 'TEST',
-          selectedAddress: defaultSelectedAddress,
-          onPreferencesStateChange: jest.fn(),
-          onTokensStateChange: jest.fn(),
-          onNetworkStateChange,
-        });
-        const updateExchangeRatesSpy = jest
-          .spyOn(controller, 'updateExchangeRates')
-          .mockResolvedValue();
-
-        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-        await networkStateChangeListener!({
-          providerConfig: { chainId: toHex(1337), ticker: 'NEW' },
-        });
-
-        expect(updateExchangeRatesSpy).not.toHaveBeenCalled();
-      });
-
-      it('should not update exchange rates when chain ID changes', async () => {
-        let networkStateChangeListener: (state: any) => Promise<void>;
-        const onNetworkStateChange = jest
-          .fn()
-          .mockImplementation((listener) => {
-            networkStateChangeListener = listener;
-          });
-        const controller = new TokenRatesController({
-          interval: 100,
-          getNetworkClientById: jest.fn(),
-          chainId: toHex(1337),
-          ticker: 'TEST',
-          selectedAddress: defaultSelectedAddress,
-          onPreferencesStateChange: jest.fn(),
-          onTokensStateChange: jest.fn(),
-          onNetworkStateChange,
-        });
-        const updateExchangeRatesSpy = jest
-          .spyOn(controller, 'updateExchangeRates')
-          .mockResolvedValue();
-
-        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-        await networkStateChangeListener!({
-          providerConfig: { chainId: toHex(1338), ticker: 'TEST' },
-        });
-
-        expect(updateExchangeRatesSpy).not.toHaveBeenCalled();
-      });
-
-      it('should clear contractExchangeRates state when ticker changes', async () => {
-        let networkStateChangeListener: (state: any) => Promise<void>;
-        const onNetworkStateChange = jest
-          .fn()
-          .mockImplementation((listener) => {
-            networkStateChangeListener = listener;
-          });
-        const controller = new TokenRatesController({
-          interval: 100,
-          getNetworkClientById: jest.fn(),
-          chainId: toHex(1337),
-          ticker: 'TEST',
-          selectedAddress: defaultSelectedAddress,
-          onPreferencesStateChange: jest.fn(),
-          onTokensStateChange: jest.fn(),
-          onNetworkStateChange,
-        });
-        jest.spyOn(controller, 'updateExchangeRates').mockResolvedValue();
-
-        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-        await networkStateChangeListener!({
-          providerConfig: { chainId: toHex(1337), ticker: 'NEW' },
-        });
-
-        expect(controller.state.contractExchangeRates).toStrictEqual({});
-      });
-
-      it('should clear contractExchangeRates state when chain ID changes', async () => {
-        let networkStateChangeListener: (state: any) => Promise<void>;
-        const onNetworkStateChange = jest
-          .fn()
-          .mockImplementation((listener) => {
-            networkStateChangeListener = listener;
-          });
-        const controller = new TokenRatesController({
-          interval: 100,
-          getNetworkClientById: jest.fn(),
-          chainId: toHex(1337),
-          ticker: 'TEST',
-          selectedAddress: defaultSelectedAddress,
-          onPreferencesStateChange: jest.fn(),
-          onTokensStateChange: jest.fn(),
-          onNetworkStateChange,
-        });
-        jest.spyOn(controller, 'updateExchangeRates').mockResolvedValue();
-
-        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-        await networkStateChangeListener!({
-          providerConfig: { chainId: toHex(1338), ticker: 'TEST' },
-        });
-
-        expect(controller.state.contractExchangeRates).toStrictEqual({});
-      });
-    });
-  });
-
-  describe('PreferencesController::stateChange', () => {
-    let clock: sinon.SinonFakeTimers;
-
-    beforeEach(() => {
-      clock = useFakeTimers({ now: Date.now() });
-    });
-
-    afterEach(() => {
-      clock.restore();
-    });
-
-    describe('when polling is active', () => {
-      it('should update exchange rates when selected address changes', async () => {
-        let preferencesStateChangeListener: (state: any) => Promise<void>;
-        const onPreferencesStateChange = jest
-          .fn()
-          .mockImplementation((listener) => {
-            preferencesStateChangeListener = listener;
-          });
-        const alternateSelectedAddress =
-          '0x0000000000000000000000000000000000000002';
-        const controller = new TokenRatesController(
-          {
-            interval: 100,
-            getNetworkClientById: jest.fn(),
-            chainId: '0x1',
-            ticker: NetworksTicker.mainnet,
-            selectedAddress: defaultSelectedAddress,
-            onPreferencesStateChange,
-            onTokensStateChange: jest.fn(),
-            onNetworkStateChange: jest.fn(),
-          },
-          {
-            allTokens: {
-              '0x1': {
-                [alternateSelectedAddress]: [
-                  { address: '0x02', decimals: 0, symbol: '', aggregators: [] },
-                  { address: '0x03', decimals: 0, symbol: '', aggregators: [] },
-                ],
-              },
-            },
-          },
-        );
-        await controller.start();
-        const updateExchangeRatesSpy = jest
-          .spyOn(controller, 'updateExchangeRates')
-          .mockResolvedValue();
-
-        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-        await preferencesStateChangeListener!({
-          selectedAddress: alternateSelectedAddress,
-        });
-
-        expect(updateExchangeRatesSpy).toHaveBeenCalledTimes(1);
-      });
-
-      it('should not update exchange rates when preferences state changes without selected address changing', async () => {
-        let preferencesStateChangeListener: (state: any) => Promise<void>;
-        const onPreferencesStateChange = jest
-          .fn()
-          .mockImplementation((listener) => {
-            preferencesStateChangeListener = listener;
-          });
-        const controller = new TokenRatesController(
-          {
-            interval: 100,
-            getNetworkClientById: jest.fn(),
-            chainId: '0x1',
-            ticker: NetworksTicker.mainnet,
-            selectedAddress: defaultSelectedAddress,
-            onPreferencesStateChange,
-            onTokensStateChange: jest.fn(),
-            onNetworkStateChange: jest.fn(),
-          },
-          {
-            allTokens: {
-              '0x1': {
-                [defaultSelectedAddress]: [
-                  { address: '0x02', decimals: 0, symbol: '', aggregators: [] },
-                  { address: '0x03', decimals: 0, symbol: '', aggregators: [] },
-                ],
-              },
-            },
-          },
-        );
-        await controller.start();
-        const updateExchangeRatesSpy = jest
-          .spyOn(controller, 'updateExchangeRates')
-          .mockResolvedValue();
-
-        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-        await preferencesStateChangeListener!({
-          selectedAddress: defaultSelectedAddress,
-          exampleConfig: 'exampleValue',
-        });
-
-        expect(updateExchangeRatesSpy).not.toHaveBeenCalled();
-      });
-    });
-
-    describe('when polling is inactive', () => {
-      it('should not update exchange rates when selected address changes', async () => {
-        let preferencesStateChangeListener: (state: any) => Promise<void>;
-        const onPreferencesStateChange = jest
-          .fn()
-          .mockImplementation((listener) => {
-            preferencesStateChangeListener = listener;
-          });
-        const alternateSelectedAddress =
-          '0x0000000000000000000000000000000000000002';
-        const controller = new TokenRatesController(
-          {
-            interval: 100,
-            getNetworkClientById: jest.fn(),
-            chainId: '0x1',
-            ticker: NetworksTicker.mainnet,
-            selectedAddress: defaultSelectedAddress,
-            onPreferencesStateChange,
-            onTokensStateChange: jest.fn(),
-            onNetworkStateChange: jest.fn(),
-          },
-          {
-            allTokens: {
-              '0x1': {
-                [alternateSelectedAddress]: [
-                  { address: '0x02', decimals: 0, symbol: '', aggregators: [] },
-                  { address: '0x03', decimals: 0, symbol: '', aggregators: [] },
-                ],
-              },
-            },
-          },
-        );
-        const updateExchangeRatesSpy = jest
-          .spyOn(controller, 'updateExchangeRates')
-          .mockResolvedValue();
-
-        // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
-        await preferencesStateChangeListener!({
-          selectedAddress: alternateSelectedAddress,
-        });
-
-        expect(updateExchangeRatesSpy).not.toHaveBeenCalled();
-      });
-    });
-  });
-
-  describe('legacy polling', () => {
-    let clock: sinon.SinonFakeTimers;
-
-    beforeEach(() => {
-      clock = useFakeTimers({ now: Date.now() });
-    });
-
-    afterEach(() => {
-      clock.restore();
-    });
-
-    describe('start', () => {
-      it('should poll and update rate in the right interval', async () => {
-        const fetchSpy = jest
-          .spyOn(globalThis, 'fetch')
-          .mockImplementation(() => {
-            throw new Error('Network error');
-          });
-        const interval = 100;
-        const controller = new TokenRatesController(
-          {
-            interval,
-            getNetworkClientById: jest.fn(),
-            chainId: '0x1',
-            ticker: NetworksTicker.mainnet,
-            selectedAddress: defaultSelectedAddress,
-            onPreferencesStateChange: jest.fn(),
-            onTokensStateChange: jest.fn(),
-            onNetworkStateChange: jest.fn(),
-          },
-          {
-            allTokens: {
-              '0x1': {
-                [defaultSelectedAddress]: [
-                  { address: 'bar', decimals: 0, symbol: '', aggregators: [] },
-                ],
-              },
-            },
-          },
-        );
-
-        await controller.start();
-        expect(fetchSpy).toHaveBeenCalledTimes(1);
-
-        await advanceTime({ clock, duration: interval });
-        expect(fetchSpy).toHaveBeenCalledTimes(2);
-
-        await advanceTime({ clock, duration: interval });
-        expect(fetchSpy).toHaveBeenCalledTimes(3);
-      });
-    });
-
-    describe('stop', () => {
-      it('should stop polling', async () => {
-        const fetchSpy = jest
-          .spyOn(globalThis, 'fetch')
-          .mockImplementation(() => {
-            throw new Error('Network error');
-          });
-        const interval = 100;
-        const controller = new TokenRatesController(
-          {
-            interval,
-            getNetworkClientById: jest.fn(),
-            chainId: '0x1',
-            ticker: NetworksTicker.mainnet,
-            selectedAddress: defaultSelectedAddress,
-            onPreferencesStateChange: jest.fn(),
-            onTokensStateChange: jest.fn(),
-            onNetworkStateChange: jest.fn(),
-          },
-          {
-            allTokens: {
-              '0x1': {
-                [defaultSelectedAddress]: [
-                  { address: 'bar', decimals: 0, symbol: '', aggregators: [] },
-                ],
-              },
-            },
-          },
-        );
-
-        await controller.start();
-        expect(fetchSpy).toHaveBeenCalledTimes(1);
-
-        controller.stop();
-
-        await advanceTime({ clock, duration: interval });
-        expect(fetchSpy).toHaveBeenCalledTimes(1);
-      });
-    });
-  });
-
-  describe('polling by networkClientId', () => {
-    let clock: sinon.SinonFakeTimers;
-
-    beforeEach(() => {
-      clock = useFakeTimers({ now: Date.now() });
-    });
-
-    afterEach(() => {
-      clock.restore();
-    });
-
-    it('should poll on the right interval', async () => {
-      const interval = 100;
-      const controller = new TokenRatesController({
+      },
+      {
         interval,
-        chainId: '0x2',
-        ticker: 'ticker',
-        selectedAddress: '0xdeadbeef',
-        onPreferencesStateChange: jest.fn(),
-        onTokensStateChange: jest.fn(),
-        onNetworkStateChange: jest.fn(),
-        getNetworkClientById: jest.fn().mockReturnValue({
-          configuration: {
-            chainId: '0x1',
-            ticker: NetworksTicker.mainnet,
-          },
-        }),
-      });
-      const updateExchangeRatesByChainIdSpy = jest
-        .spyOn(controller, 'updateExchangeRatesByChainId')
-        .mockResolvedValue();
+        tokens: [{ address: 'bar', decimals: 0, symbol: '', aggregators: [] }],
+      },
+    );
 
-      controller.startPollingByNetworkClientId('mainnet', {
-        tokenAddresses: ['0x0'],
-      });
-      await advanceTime({ clock, duration: 0 });
-      expect(updateExchangeRatesByChainIdSpy).toHaveBeenCalledTimes(1);
-
-      await advanceTime({ clock, duration: interval });
-      expect(updateExchangeRatesByChainIdSpy).toHaveBeenCalledTimes(2);
-
-      await advanceTime({ clock, duration: interval });
-      expect(updateExchangeRatesByChainIdSpy).toHaveBeenCalledTimes(3);
+    expect(pollSpy).toHaveBeenCalledTimes(1);
+    expect(pollSpy).not.toHaveBeenCalledTimes(times);
+    await new Promise((resolve) => {
+      setTimeout(resolve, interval * (times - 0.5));
     });
+    expect(pollSpy).toHaveBeenCalledTimes(times);
+    pollSpy.mockClear();
+  });
 
-    it('should update state on poll', async () => {
-      const interval = 100;
-      const controller = new TokenRatesController({
-        interval,
-        chainId: '0x2',
-        ticker: 'ticker',
-        selectedAddress: '0xdeadbeef',
-        onPreferencesStateChange: jest.fn(),
-        onTokensStateChange: jest.fn(),
-        onNetworkStateChange: jest.fn(),
-        getNetworkClientById: jest.fn().mockReturnValue({
-          configuration: {
-            chainId: '0x1',
-            ticker: NetworksTicker.mainnet,
-          },
-        }),
-      });
-      jest.spyOn(controller, 'getChainSlug').mockResolvedValue('ethereum');
-      jest.spyOn(controller, 'fetchAndMapExchangeRates').mockResolvedValue({
-        '0x02': 0.001,
-        '0x03': 0.002,
-      });
+  it('should not update rates if disabled', async () => {
+    const controller = new TokenRatesController(
+      {
+        onTokensStateChange: sinon.stub(),
+        onCurrencyRateStateChange: sinon.stub(),
+        onNetworkStateChange: sinon.stub(),
+      },
+      {
+        interval: 10,
+      },
+    );
+    controller.fetchExchangeRate = sinon.stub();
+    controller.disabled = true;
+    await controller.updateExchangeRates();
+    expect((controller.fetchExchangeRate as any).called).toBe(false);
+  });
 
-      controller.startPollingByNetworkClientId('mainnet', {
-        tokenAddresses: ['0x02', '0x03'],
-      });
-      await advanceTime({ clock, duration: 0 });
+  it('should clear previous interval', async () => {
+    const mock = sinon.stub(global, 'clearTimeout');
+    const controller = new TokenRatesController(
+      {
+        onTokensStateChange: sinon.stub(),
+        onCurrencyRateStateChange: sinon.stub(),
+        onNetworkStateChange: sinon.stub(),
+      },
+      { interval: 1337 },
+    );
+    await new Promise<void>((resolve) => {
+      setTimeout(() => {
+        controller.poll(1338);
+        expect(mock.called).toBe(true);
+        resolve();
+      }, 100);
+    });
+  });
 
-      expect(controller.state.contractExchangeRatesByChainId).toStrictEqual({
-        '0x1': {
-          ETH: {
-            '0x02': 0.001,
-            '0x03': 0.002,
-          },
+  it('should update all rates', async () => {
+    new NetworkController({
+      infuraProjectId: 'infura-project-id',
+      messenger,
+      trackMetaMetricsEvent: jest.fn(),
+    });
+    const preferences = new PreferencesController();
+    const tokensController = new TokensController({
+      onPreferencesStateChange: (listener) => preferences.subscribe(listener),
+      onNetworkStateChange: (listener) =>
+        messenger.subscribe('NetworkController:stateChange', listener),
+      messenger: undefined as unknown as TokensControllerMessenger,
+    });
+    const controller = new TokenRatesController(
+      {
+        onTokensStateChange: (listener) => tokensController.subscribe(listener),
+        onCurrencyRateStateChange: sinon.stub(),
+        onNetworkStateChange: (listener) =>
+          messenger.subscribe('NetworkController:stateChange', listener),
+      },
+      { interval: 10, chainId: '1' },
+    );
+    const address = '0x89d24A6b4CcB1B6fAA2625fE562bDD9a23260359';
+    expect(controller.state.contractExchangeRates).toStrictEqual({});
+    controller.tokens = [
+      { address, decimals: 18, symbol: 'DAI', aggregators: [] },
+      { address: ADDRESS, decimals: 0, symbol: '', aggregators: [] },
+    ];
+    await controller.updateExchangeRates();
+    expect(Object.keys(controller.state.contractExchangeRates)).toContain(
+      address,
+    );
+    expect(controller.state.contractExchangeRates[address]).toBeGreaterThan(0);
+    expect(Object.keys(controller.state.contractExchangeRates)).toContain(
+      ADDRESS,
+    );
+    expect(controller.state.contractExchangeRates[ADDRESS]).toStrictEqual(0);
+  });
+
+  it('should handle balance not found in API', async () => {
+    const controller = new TokenRatesController(
+      {
+        onTokensStateChange: sinon.stub(),
+        onCurrencyRateStateChange: sinon.stub(),
+        onNetworkStateChange: sinon.stub(),
+      },
+      { interval: 10 },
+    );
+    sinon.stub(controller, 'fetchExchangeRate').throws({
+      error: 'Not Found',
+      message: 'Not Found',
+    });
+    expect(controller.state.contractExchangeRates).toStrictEqual({});
+    controller.tokens = [
+      { address: 'bar', decimals: 0, symbol: '', aggregators: [] },
+    ];
+    const mock = sinon.stub(controller, 'updateExchangeRates');
+    await controller.updateExchangeRates();
+    expect(mock).not.toThrow();
+  });
+
+  it('should update exchange rates when tokens change', async () => {
+    let tokenStateChangeListener: (state: any) => void;
+    const onTokensStateChange = sinon.stub().callsFake((listener) => {
+      tokenStateChangeListener = listener;
+    });
+    const onCurrencyRateStateChange = sinon.stub();
+    const onNetworkStateChange = sinon.stub();
+    const controller = new TokenRatesController(
+      {
+        onTokensStateChange,
+        onCurrencyRateStateChange,
+        onNetworkStateChange,
+      },
+      { interval: 10 },
+    );
+
+    const updateExchangeRatesStub = sinon.stub(
+      controller,
+      'updateExchangeRates',
+    );
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+    tokenStateChangeListener!({ tokens: [], detectedTokens: [] });
+    // FIXME: This is now being called twice
+    expect(updateExchangeRatesStub.callCount).toStrictEqual(2);
+  });
+
+  it('should update exchange rates when native currency changes', async () => {
+    let currencyRateStateChangeListener: (state: any) => void;
+    const onTokensStateChange = sinon.stub();
+    const onCurrencyRateStateChange = sinon.stub().callsFake((listener) => {
+      currencyRateStateChangeListener = listener;
+    });
+    const onNetworkStateChange = sinon.stub();
+    const controller = new TokenRatesController(
+      {
+        onTokensStateChange,
+        onCurrencyRateStateChange,
+        onNetworkStateChange,
+      },
+      { interval: 10 },
+    );
+
+    const updateExchangeRatesStub = sinon.stub(
+      controller,
+      'updateExchangeRates',
+    );
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+    currencyRateStateChangeListener!({ nativeCurrency: 'dai' });
+    // FIXME: This is now being called twice
+    expect(updateExchangeRatesStub.callCount).toStrictEqual(2);
+  });
+
+  it('should update exchange rates when native currency is not supported by coingecko', async () => {
+    nock(COINGECKO_API)
+      .get(`${COINGECKO_MATIC_PATH}`)
+      .query({ contract_addresses: '0x02,0x03', vs_currencies: 'eth' })
+      .reply(200, {
+        '0x02': {
+          eth: 0.001, // token value in terms of ETH
         },
-      });
+        '0x03': {
+          eth: 0.002,
+        },
+      })
+      .persist();
+
+    nock('https://min-api.cryptocompare.com')
+      .get('/data/price?fsym=ETH&tsyms=MATIC')
+      .reply(200, { MATIC: 0.5 }) // .5 eth to 1 matic
+      .persist();
+
+    const expectedExchangeRates = {
+      '0x02': 0.0005, // token value in terms of matic = (token value in eth) * (eth value in matic) = .001 * .5
+      '0x03': 0.001,
+    };
+
+    let tokenStateChangeListener: (state: any) => void;
+    const onTokensStateChange = sinon.stub().callsFake((listener) => {
+      tokenStateChangeListener = listener;
     });
 
-    it('should stop polling', async () => {
-      const interval = 100;
-      const controller = new TokenRatesController({
-        interval,
-        chainId: '0x2',
-        ticker: 'ticker',
-        selectedAddress: '0xdeadbeef',
-        onPreferencesStateChange: jest.fn(),
-        onTokensStateChange: jest.fn(),
-        onNetworkStateChange: jest.fn(),
-        getNetworkClientById: jest.fn().mockReturnValue({
-          configuration: {
-            chainId: '0x1',
-            ticker: NetworksTicker.mainnet,
-          },
-        }),
-      });
-      const updateExchangeRatesByChainIdSpy = jest
-        .spyOn(controller, 'updateExchangeRatesByChainId')
-        .mockResolvedValue();
+    const onNetworkStateChange = sinon.stub();
+    const controller = new TokenRatesController(
+      {
+        onTokensStateChange,
+        onCurrencyRateStateChange: sinon.stub(),
+        onNetworkStateChange,
+      },
+      { interval: 10 },
+    );
+    await controller.configure({ chainId: '137', nativeCurrency: 'MATIC' });
 
-      const pollingToken = controller.startPollingByNetworkClientId('mainnet', {
-        tokenAddresses: ['0x0'],
-      });
-      await advanceTime({ clock, duration: 0 });
-      expect(updateExchangeRatesByChainIdSpy).toHaveBeenCalledTimes(1);
-
-      controller.stopPollingByPollingToken(pollingToken);
-
-      await advanceTime({ clock, duration: interval });
-      expect(updateExchangeRatesByChainIdSpy).toHaveBeenCalledTimes(1);
-    });
-  });
-
-  describe('updateExchangeRates', () => {
-    it('should not update exchange rates if legacy polling is disabled', async () => {
-      const controller = new TokenRatesController({
-        chainId: '0x1',
-        ticker: NetworksTicker.mainnet,
-        selectedAddress: defaultSelectedAddress,
-        onPreferencesStateChange: jest.fn(),
-        onTokensStateChange: jest.fn(),
-        onNetworkStateChange: jest.fn(),
-        getNetworkClientById: jest.fn(),
-      });
-      controller.disabled = true;
-
-      const updateExchangeRatesByChainIdSpy = jest
-        .spyOn(controller, 'updateExchangeRatesByChainId')
-        .mockResolvedValue();
-
-      await controller.updateExchangeRates();
-      expect(updateExchangeRatesByChainIdSpy).not.toHaveBeenCalled();
-    });
-
-    it('should update legacy state after updateExchangeRatesByChainId', async () => {
-      const controller = new TokenRatesController(
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+    await tokenStateChangeListener!({
+      tokens: [
         {
-          chainId: '0x1',
-          ticker: NetworksTicker.mainnet,
-          selectedAddress: defaultSelectedAddress,
-          onPreferencesStateChange: jest.fn(),
-          onTokensStateChange: jest.fn(),
-          onNetworkStateChange: jest.fn(),
-          getNetworkClientById: jest.fn(),
+          address: '0x02',
+          decimals: 18,
+          image: undefined,
+          symbol: 'bar',
+          isERC721: false,
         },
         {
-          allTokens: {
-            '0x1': {
-              [defaultSelectedAddress]: [
-                {
-                  address: '0x123',
-                  decimals: 18,
-                  symbol: 'DAI',
-                  aggregators: [],
-                },
-                { address: ADDRESS, decimals: 0, symbol: '', aggregators: [] },
-              ],
-            },
-          },
+          address: '0x03',
+          decimals: 18,
+          image: undefined,
+          symbol: 'bazz',
+          isERC721: false,
         },
-      );
-
-      const updateExchangeRatesByChainIdSpy = jest
-        .spyOn(controller, 'updateExchangeRatesByChainId')
-        .mockResolvedValue();
-
-      // Setting mock state as if updateExchangeRatesByChainId updated it
-      controller.state.contractExchangeRatesByChainId = {
-        '0x1': {
-          [NetworksTicker.mainnet]: {
-            '0x123': 123,
-            '0x01': 100,
-          },
-        },
-      };
-
-      await controller.updateExchangeRates();
-
-      expect(updateExchangeRatesByChainIdSpy).toHaveBeenCalledWith({
-        chainId: '0x1',
-        nativeCurrency: NetworksTicker.mainnet,
-        tokenAddresses: ['0x123', ADDRESS],
-      });
-
-      expect(controller.state.contractExchangeRates).toStrictEqual({
-        '0x123': 123,
-        '0x01': 100,
-      });
+      ],
+      detectedTokens: [],
     });
+
+    await controller.updateExchangeRates();
+
+    expect(controller.state.contractExchangeRates).toStrictEqual(
+      expectedExchangeRates,
+    );
   });
 
-  describe('updateExchangeRatesByChainId', () => {
-    it('should not update state if no tokenAddresses are provided', async () => {
-      const controller = new TokenRatesController({
-        interval: 100,
-        chainId: '0x2',
-        ticker: 'ticker',
-        selectedAddress: '0xdeadbeef',
-        onPreferencesStateChange: jest.fn(),
-        onTokensStateChange: jest.fn(),
-        onNetworkStateChange: jest.fn(),
-        getNetworkClientById: jest.fn(),
-      });
-
-      expect(controller.state.contractExchangeRates).toStrictEqual({});
-      await controller.updateExchangeRatesByChainId({
-        chainId: '0x1',
-        nativeCurrency: 'ETH',
-        tokenAddresses: [],
-      });
-      expect(controller.state.contractExchangeRatesByChainId).toStrictEqual({});
-    });
-
-    it('should update all rates', async () => {
-      const tokenAddress = '0x89d24A6b4CcB1B6fAA2625fE562bDD9a23260359';
-      nock(COINGECKO_API)
-        .get(
-          `${COINGECKO_ETH_PATH}?contract_addresses=${tokenAddress}&vs_currencies=eth`,
-        )
-        .reply(200, {
-          '0x89d24a6b4ccb1b6faa2625fe562bdd9a23260359': { eth: 0.00561045 },
-        });
-      const controller = new TokenRatesController({
-        interval: 100,
-        chainId: '0x2',
-        ticker: 'ticker',
-        selectedAddress: '0xdeadbeef',
-        onPreferencesStateChange: jest.fn(),
-        onTokensStateChange: jest.fn(),
-        onNetworkStateChange: jest.fn(),
-        getNetworkClientById: jest.fn(),
-      });
-
-      expect(controller.state.contractExchangeRates).toStrictEqual({});
-      await controller.updateExchangeRatesByChainId({
-        chainId: '0x1',
-        nativeCurrency: 'ETH',
-        tokenAddresses: [tokenAddress],
-      });
-      expect(
-        Object.keys(controller.state.contractExchangeRatesByChainId['0x1'].ETH),
-      ).toContain(tokenAddress);
-      expect(
-        controller.state.contractExchangeRatesByChainId['0x1'].ETH[
-          tokenAddress
-        ],
-      ).toBeGreaterThan(0);
-    });
-
-    it('should handle balance not found in API', async () => {
-      const controller = new TokenRatesController({
-        chainId: '0x2',
-        ticker: 'ticker',
-        selectedAddress: '0xdeadbeef',
-        onPreferencesStateChange: jest.fn(),
-        onTokensStateChange: jest.fn(),
-        onNetworkStateChange: jest.fn(),
-        getNetworkClientById: jest.fn(),
-      });
-      expect(controller.state.contractExchangeRates).toStrictEqual({});
-      jest.spyOn(controller, 'fetchExchangeRate').mockRejectedValue({
-        error: 'Not Found',
-        message: 'Not Found',
-      });
-
-      const result = controller.updateExchangeRatesByChainId({
-        chainId: '0x1',
-        nativeCurrency: 'ETH',
-        tokenAddresses: ['0x0'],
-      });
-
-      await expect(result).rejects.not.toThrow();
-    });
-
-    it('should update exchange rates when native currency is not supported by coingecko', async () => {
-      nock(COINGECKO_API)
-        .get(`${COINGECKO_MATIC_PATH}`)
-        .query({ contract_addresses: '0x02,0x03', vs_currencies: 'eth' })
-        .reply(200, {
-          '0x02': {
-            eth: 0.001, // token value in terms of ETH
-          },
-          '0x03': {
-            eth: 0.002,
-          },
-        });
-
-      nock('https://min-api.cryptocompare.com')
-        .get('/data/price?fsym=ETH&tsyms=MATIC')
-        .reply(200, { MATIC: 0.5 }); // .5 eth to 1 matic
-
-      const controller = new TokenRatesController({
-        chainId: '0x2',
-        ticker: 'ticker',
-        selectedAddress: '0xdeadbeef',
-        onPreferencesStateChange: jest.fn(),
-        onTokensStateChange: jest.fn(),
-        onNetworkStateChange: jest.fn(),
-        getNetworkClientById: jest.fn(),
-      });
-
-      await controller.updateExchangeRatesByChainId({
-        chainId: toHex(137),
-        nativeCurrency: 'MATIC',
-        tokenAddresses: ['0x02', '0x03'],
-      });
-
-      expect(controller.state.contractExchangeRatesByChainId).toStrictEqual({
-        [toHex(137)]: {
-          MATIC: {
-            '0x02': 0.0005, // token value in terms of matic = (token value in eth) * (eth value in matic) = .001 * .5
-            '0x03': 0.001,
-          },
+  it('should clear contractExchangeRates state when network is changed', async () => {
+    nock(COINGECKO_API)
+      .get(`${COINGECKO_ETH_PATH}`)
+      .query({ contract_addresses: '0x02,0x03', vs_currencies: 'eth' })
+      .reply(200, {
+        '0x02': {
+          eth: 0.001, // token value in terms of ETH
         },
-      });
-    });
-
-    it('should update exchange rates with undefined when chain is not supported by coingecko', async () => {
-      const controller = new TokenRatesController({
-        chainId: '0x2',
-        ticker: 'ticker',
-        selectedAddress: '0xdeadbeef',
-        onPreferencesStateChange: jest.fn(),
-        onTokensStateChange: jest.fn(),
-        onNetworkStateChange: jest.fn(),
-        getNetworkClientById: jest.fn(),
-      });
-      jest.spyOn(controller, 'getChainSlug').mockResolvedValue('');
-
-      await controller.updateExchangeRatesByChainId({
-        chainId: toHex(137),
-        nativeCurrency: 'MATIC',
-        tokenAddresses: ['0x02', '0x03'],
-      });
-
-      expect(controller.state.contractExchangeRatesByChainId).toStrictEqual({
-        [toHex(137)]: {
-          MATIC: {
-            '0x02': undefined,
-            '0x03': undefined,
-          },
+        '0x03': {
+          eth: 0.002,
         },
-      });
+      })
+      .persist();
+
+    let networkChangeListener: (state: any) => void;
+    const onNetworkStateChange = sinon.stub().callsFake((listener) => {
+      networkChangeListener = listener;
     });
+
+    let tokenStateChangeListener: (state: any) => void;
+    const onTokensStateChange = sinon.stub().callsFake((listener) => {
+      tokenStateChangeListener = listener;
+    });
+
+    const controller = new TokenRatesController(
+      {
+        onTokensStateChange,
+        onNetworkStateChange,
+        onCurrencyRateStateChange: sinon.stub(),
+      },
+      { interval: 10 },
+    );
+
+    await controller.configure({ chainId: '1', nativeCurrency: 'ETH' });
+
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+    await tokenStateChangeListener!({
+      tokens: [
+        {
+          address: '0x02',
+          decimals: 18,
+          image: undefined,
+          symbol: 'bar',
+          isERC721: false,
+        },
+        {
+          address: '0x03',
+          decimals: 18,
+          image: undefined,
+          symbol: 'bazz',
+          isERC721: false,
+        },
+      ],
+      detectedTokens: [],
+    });
+
+    await controller.updateExchangeRates();
+
+    expect(controller.state.contractExchangeRates).toStrictEqual({
+      '0x02': 0.001,
+      '0x03': 0.002,
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+    await networkChangeListener!({
+      providerConfig: { chainId: '4' },
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+    await tokenStateChangeListener!({
+      tokens: [],
+      detectedTokens: [],
+    });
+
+    expect(controller.state.contractExchangeRates).toStrictEqual({});
   });
 
-  describe('getChainSlug', () => {
-    it('returns the chain slug for the chain id', async () => {
-      const controller = new TokenRatesController({
-        chainId: '0x2',
-        ticker: 'ticker',
-        selectedAddress: '0xdeadbeef',
-        onPreferencesStateChange: jest.fn(),
-        onTokensStateChange: jest.fn(),
-        onNetworkStateChange: jest.fn(),
-        getNetworkClientById: jest.fn(),
-      });
+  it('should update exchange rates when detected tokens are added', async () => {
+    nock(COINGECKO_API)
+      .get(`${COINGECKO_ETH_PATH}`)
+      .query({ contract_addresses: '0x02,0x03', vs_currencies: 'eth' })
+      .reply(200, {
+        '0x02': {
+          eth: 0.001,
+        },
+        '0x03': {
+          eth: 0.002,
+        },
+      })
+      .persist();
 
-      expect(await controller.getChainSlug('0x1')).toBe('ethereum');
-      expect(await controller.getChainSlug(toHex(56))).toBe(
-        'binance-smart-chain',
-      );
-      expect(await controller.getChainSlug(toHex(137))).toBe(
-        'polygon-pos-network',
-      );
+    let tokenStateChangeListener: (state: any) => void;
+    const onTokensStateChange = sinon.stub().callsFake((listener) => {
+      tokenStateChangeListener = listener;
     });
 
-    it('returns null if there is no chain slug for the chain id', async () => {
-      const controller = new TokenRatesController({
-        chainId: '0x2',
-        ticker: 'ticker',
-        selectedAddress: '0xdeadbeef',
-        onPreferencesStateChange: jest.fn(),
-        onTokensStateChange: jest.fn(),
-        onNetworkStateChange: jest.fn(),
-        getNetworkClientById: jest.fn(),
-      });
+    const controller = new TokenRatesController(
+      {
+        onTokensStateChange,
+        onNetworkStateChange: sinon.stub(),
+        onCurrencyRateStateChange: sinon.stub(),
+      },
+      { interval: 10, chainId: '1', nativeCurrency: 'ETH' },
+    );
 
-      expect(await controller.getChainSlug('0x2')).toBeNull();
-    });
-  });
+    expect(controller.state.contractExchangeRates).toStrictEqual({});
 
-  describe('fetchAndMapExchangeRates', () => {
-    describe('native currency is supported', () => {
-      it('returns the exchange rates directly', async () => {
-        nock(COINGECKO_API)
-          .get(`${COINGECKO_ETH_PATH}`)
-          .query({ contract_addresses: '0x02,0x03', vs_currencies: 'eth' })
-          .reply(200, {
-            '0x02': {
-              eth: 0.001,
-            },
-            '0x03': {
-              eth: 0.002,
-            },
-          });
-
-        const controller = new TokenRatesController({
-          chainId: '0x2',
-          ticker: 'ticker',
-          selectedAddress: '0xdeadbeef',
-          onPreferencesStateChange: jest.fn(),
-          onTokensStateChange: jest.fn(),
-          onNetworkStateChange: jest.fn(),
-          getNetworkClientById: jest.fn(),
-        });
-
-        const contractExchangeRates = await controller.fetchAndMapExchangeRates(
-          'ETH',
-          'ethereum',
-          ['0x02', '0x03'],
-        );
-
-        expect(contractExchangeRates).toStrictEqual({
-          '0x02': 0.001,
-          '0x03': 0.002,
-        });
-      });
+    // eslint-disable-next-line @typescript-eslint/no-non-null-assertion
+    await tokenStateChangeListener!({
+      detectedTokens: [
+        {
+          address: '0x02',
+          decimals: 18,
+          image: undefined,
+          symbol: 'bar',
+          isERC721: false,
+        },
+        {
+          address: '0x03',
+          decimals: 18,
+          image: undefined,
+          symbol: 'bazz',
+          isERC721: false,
+        },
+      ],
+      tokens: [],
     });
 
-    describe('native currency is not supported', () => {
-      it('returns the exchange rates using ETH as a fallback currency', async () => {
-        nock(COINGECKO_API)
-          .get(`${COINGECKO_ETH_PATH}`)
-          .query({ contract_addresses: '0x02,0x03', vs_currencies: 'eth' })
-          .reply(200, {
-            '0x02': {
-              eth: 0.001,
-            },
-            '0x03': {
-              eth: 0.002,
-            },
-          });
+    await controller.updateExchangeRates();
 
-        nock('https://min-api.cryptocompare.com')
-          .get('/data/price?fsym=ETH&tsyms=LOL')
-          .reply(200, { LOL: 0.5 });
-
-        const controller = new TokenRatesController({
-          chainId: '0x2',
-          ticker: 'ticker',
-          selectedAddress: '0xdeadbeef',
-          onPreferencesStateChange: jest.fn(),
-          onTokensStateChange: jest.fn(),
-          onNetworkStateChange: jest.fn(),
-          getNetworkClientById: jest.fn(),
-        });
-
-        const contractExchangeRates = await controller.fetchAndMapExchangeRates(
-          'LOL',
-          'ethereum',
-          ['0x02', '0x03'],
-        );
-
-        expect(contractExchangeRates).toStrictEqual({
-          '0x02': 0.0005,
-          '0x03': 0.001,
-        });
-      });
-
-      it('returns the an empty object when market does not exist for pair', async () => {
-        nock(COINGECKO_API)
-          .get(`${COINGECKO_ETH_PATH}`)
-          .query({ contract_addresses: '0x02,0x03', vs_currencies: 'eth' })
-          .reply(200, {
-            '0x02': {
-              eth: 0.001,
-            },
-            '0x03': {
-              eth: 0.002,
-            },
-          });
-
-        const controller = new TokenRatesController({
-          chainId: '0x2',
-          ticker: 'ticker',
-          selectedAddress: '0xdeadbeef',
-          onPreferencesStateChange: jest.fn(),
-          onTokensStateChange: jest.fn(),
-          onNetworkStateChange: jest.fn(),
-          getNetworkClientById: jest.fn(),
-        });
-        jest
-          .spyOn(controller, 'fetchExchangeRate')
-          .mockRejectedValue(
-            new Error('market does not exist for this coin pair'),
-          );
-        const contractExchangeRates = await controller.fetchAndMapExchangeRates(
-          'LOL',
-          'ethereum',
-          ['0x02', '0x03'],
-        );
-
-        expect(contractExchangeRates).toStrictEqual({});
-      });
+    expect(controller.state.contractExchangeRates).toStrictEqual({
+      '0x02': 0.001,
+      '0x03': 0.002,
     });
   });
 });

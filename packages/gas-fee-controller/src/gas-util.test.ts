@@ -1,12 +1,11 @@
 import nock from 'nock';
-
 import {
   fetchLegacyGasPriceEstimates,
   normalizeGWEIDecimalNumbers,
   fetchGasEstimates,
   calculateTimeEstimate,
 } from './gas-util';
-import type { GasFeeEstimates } from './GasFeeController';
+import { GasFeeEstimates } from './GasFeeController';
 
 const mockEIP1559ApiResponses: GasFeeEstimates[] = [
   {
@@ -75,6 +74,7 @@ describe('gas utils', () => {
       const result = await fetchGasEstimates('https://not-a-real-url/');
       expect(result).toMatchObject(mockEIP1559ApiResponses[0]);
       scope.done();
+      nock.cleanAll();
     });
 
     it('should fetch external gasFeeEstimates with client id header when clientId arg is added', async () => {
@@ -86,6 +86,7 @@ describe('gas utils', () => {
       const result = await fetchGasEstimates('https://not-a-real-url/', 'test');
       expect(result).toMatchObject(mockEIP1559ApiResponses[0]);
       scope.done();
+      nock.cleanAll();
     });
 
     it('should fetch and normalize external gasFeeEstimates when data is has an invalid number of decimals', async () => {
@@ -118,6 +119,7 @@ describe('gas utils', () => {
       const result = await fetchGasEstimates('https://not-a-real-url/');
       expect(result).toMatchObject(expectedResult);
       scope.done();
+      nock.cleanAll();
     });
   });
 
@@ -140,6 +142,7 @@ describe('gas utils', () => {
         low: '22',
       });
       scope.done();
+      nock.cleanAll();
     });
 
     it('should fetch external gasPrices with client id header when clientId arg is passed', async () => {
@@ -162,6 +165,7 @@ describe('gas utils', () => {
         low: '22',
       });
       scope.done();
+      nock.cleanAll();
     });
   });
 
@@ -206,7 +210,7 @@ describe('gas utils', () => {
         '123456.0000006',
       );
       expect(normalizeGWEIDecimalNumbers(1.000000016025)).toBe('1.000000016');
-      expect(normalizeGWEIDecimalNumbers('1.0000000160000028')).toBe(
+      expect(normalizeGWEIDecimalNumbers(1.0000000160000028)).toBe(
         '1.000000016',
       );
       expect(normalizeGWEIDecimalNumbers(1.000000016522)).toBe('1.000000017');

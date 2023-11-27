@@ -1,12 +1,13 @@
-import type { BaseConfig, BaseState } from '@metamask/base-controller';
-import { BaseControllerV1 } from '@metamask/base-controller';
 import {
   normalizeEnsName,
   isValidHexAddress,
   toChecksumHexAddress,
-  toHex,
 } from '@metamask/controller-utils';
-import type { Hex } from '@metamask/utils';
+import {
+  BaseController,
+  BaseConfig,
+  BaseState,
+} from '@metamask/base-controller';
 
 /**
  * @type ContactEntry
@@ -16,9 +17,6 @@ import type { Hex } from '@metamask/utils';
  * @property name - Nickname associated with this address
  * @property importTime - Data time when an account as created/imported
  */
-// This interface was created before this ESLint rule was added.
-// Convert to a `type` in a future major version.
-// eslint-disable-next-line @typescript-eslint/consistent-type-definitions
 export interface ContactEntry {
   address: string;
   name: string;
@@ -42,13 +40,10 @@ export enum AddressType {
  * @property isEns - is the entry an ENS name
  * @property addressType - is the type of this address
  */
-// This interface was created before this ESLint rule was added.
-// Convert to a `type` in a future major version.
-// eslint-disable-next-line @typescript-eslint/consistent-type-definitions
 export interface AddressBookEntry {
   address: string;
   name: string;
-  chainId: Hex;
+  chainId: string;
   memo: string;
   isEns: boolean;
   addressType?: AddressType;
@@ -60,17 +55,14 @@ export interface AddressBookEntry {
  * Address book controller state
  * @property addressBook - Array of contact entry objects
  */
-// This interface was created before this ESLint rule was added.
-// Convert to a `type` in a future major version.
-// eslint-disable-next-line @typescript-eslint/consistent-type-definitions
 export interface AddressBookState extends BaseState {
-  addressBook: { [chainId: Hex]: { [address: string]: AddressBookEntry } };
+  addressBook: { [chainId: string]: { [address: string]: AddressBookEntry } };
 }
 
 /**
  * Controller that manages a list of recipient addresses associated with nicknames.
  */
-export class AddressBookController extends BaseControllerV1<
+export class AddressBookController extends BaseController<
   BaseConfig,
   AddressBookState
 > {
@@ -107,7 +99,7 @@ export class AddressBookController extends BaseControllerV1<
    * @param address - Recipient address to delete.
    * @returns Whether the entry was deleted.
    */
-  delete(chainId: Hex, address: string) {
+  delete(chainId: string, address: string) {
     address = toChecksumHexAddress(address);
     if (
       !isValidHexAddress(address) ||
@@ -141,7 +133,7 @@ export class AddressBookController extends BaseControllerV1<
   set(
     address: string,
     name: string,
-    chainId = toHex(1),
+    chainId = '1',
     memo = '',
     addressType?: AddressType,
   ) {

@@ -6,8 +6,7 @@
   "references": [
     { "path": "../approval-controller" },
     { "path": "../base-controller" },
-    { "path": "../controller-utils" },
-    { "path": "../json-rpc-engine" }
+    { "path": "../controller-utils" }
   ],
   "include": ["../../types", "./src"]
 }

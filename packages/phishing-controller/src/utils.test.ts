@@ -1,5 +1,4 @@
-import * as sinon from 'sinon';
-
+import sinon from 'sinon';
 import { ListKeys, ListNames } from './PhishingController';
 import { applyDiffs, fetchTimeNow } from './utils';
 

@@ -1,13 +1,11 @@
+import { BN } from 'ethereumjs-util';
 import {
   query,
   handleFetch,
   gweiDecToWEIBN,
   weiHexToGweiDec,
 } from '@metamask/controller-utils';
-import type EthQuery from '@metamask/eth-query';
-import { BN } from 'ethereumjs-util';
-
-import type {
+import {
   GasFeeEstimates,
   EthGasPriceEstimate,
   EstimatedGasFeeTimeBounds,
@@ -25,7 +23,7 @@ const makeClientIdHeader = (clientId: string) => ({ 'X-Client-Id': clientId });
  */
 export function normalizeGWEIDecimalNumbers(n: string | number) {
   const numberAsWEIHex = gweiDecToWEIBN(n).toString(16);
-  const numberAsGWEI = weiHexToGweiDec(numberAsWEIHex);
+  const numberAsGWEI = weiHexToGweiDec(numberAsWEIHex).toString(10);
   return numberAsGWEI;
 }
 
@@ -118,7 +116,7 @@ export async function fetchLegacyGasPriceEstimates(
  * @returns A gas price estimate.
  */
 export async function fetchEthGasPriceEstimate(
-  ethQuery: EthQuery,
+  ethQuery: any,
 ): Promise<EthGasPriceEstimate> {
   const gasPrice = await query(ethQuery, 'gasPrice');
   return {

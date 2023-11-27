@@ -1,7 +1,10 @@
 import { testsForRpcMethodsThatCheckForBlockHashInResponse } from './block-hash-in-response';
 import { testsForRpcMethodSupportingBlockParam } from './block-param';
-import type { ProviderType } from './helpers';
-import { withMockedCommunications, withNetworkClient } from './helpers';
+import {
+  ProviderType,
+  withMockedCommunications,
+  withNetworkClient,
+} from './helpers';
 import { testsForRpcMethodAssumingNoBlockParam } from './no-block-param';
 import { testsForRpcMethodNotHandledByMiddleware } from './not-handled-by-middleware';
 
@@ -227,7 +230,7 @@ export function testsForProviderType(providerType: ProviderType) {
               { providerType },
               async ({ makeRpcCall, blockTracker }) => {
                 await makeRpcCall(request);
-                expect(blockTracker.getCurrentBlock()).toBe('0x300');
+                expect(blockTracker.getCurrentBlock()).toStrictEqual('0x300');
               },
             );
           });
@@ -257,7 +260,7 @@ export function testsForProviderType(providerType: ProviderType) {
               { providerType },
               async ({ makeRpcCall, blockTracker }) => {
                 await makeRpcCall(request);
-                expect(blockTracker.getCurrentBlock()).toBe('0x300');
+                expect(blockTracker.getCurrentBlock()).toStrictEqual('0x300');
               },
             );
           });
@@ -266,14 +269,14 @@ export function testsForProviderType(providerType: ProviderType) {
 
       describe('eth_chainId', () => {
         it('does not hit the RPC endpoint, instead returning the configured chain id', async () => {
-          const chainId = await withNetworkClient(
+          const networkId = await withNetworkClient(
             { providerType: 'custom', customChainId: '0x1' },
             ({ makeRpcCall }) => {
               return makeRpcCall({ method: 'eth_chainId' });
             },
           );
 
-          expect(chainId).toBe('0x1');
+          expect(networkId).toStrictEqual('0x1');
         });
       });
     });
@@ -316,29 +319,44 @@ export function testsForProviderType(providerType: ProviderType) {
 
     describe('other methods', () => {
       describe('net_version', () => {
-        const networkArgs = {
-          providerType,
-          infuraNetwork: providerType === 'infura' ? 'goerli' : undefined,
-        } as const;
-        it('hits the RPC endpoint', async () => {
-          await withMockedCommunications(networkArgs, async (comms) => {
-            comms.mockRpcCall({
-              request: { method: 'net_version' },
-              response: { result: '1' },
-            });
-
+        // The Infura middleware includes `net_version` in its scaffold
+        // middleware, whereas the custom RPC middleware does not.
+        if (providerType === 'infura') {
+          it('does not hit Infura, instead returning the network ID that maps to the Infura network, as a decimal string', async () => {
             const networkId = await withNetworkClient(
-              networkArgs,
+              { providerType: 'infura', infuraNetwork: 'goerli' },
               ({ makeRpcCall }) => {
                 return makeRpcCall({
                   method: 'net_version',
                 });
               },
             );
-
-            expect(networkId).toBe('1');
+            expect(networkId).toStrictEqual('5');
           });
-        });
+        } else {
+          it('hits the RPC endpoint', async () => {
+            await withMockedCommunications(
+              { providerType: 'custom' },
+              async (comms) => {
+                comms.mockRpcCall({
+                  request: { method: 'net_version' },
+                  response: { result: '1' },
+                });
+
+                const networkId = await withNetworkClient(
+                  { providerType: 'custom' },
+                  ({ makeRpcCall }) => {
+                    return makeRpcCall({
+                      method: 'net_version',
+                    });
+                  },
+                );
+
+                expect(networkId).toStrictEqual('1');
+              },
+            );
+          });
+        }
       });
     });
   });
