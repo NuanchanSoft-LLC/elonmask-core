@@ -83,7 +83,6 @@ describe('fetchGasEstimatesViaEthFeeHistory', () => {
       .calledWith(blocks)
       .mockReturnValue(levelSpecificEstimates);
 
-    // @ts-expect-error Mock eth query does not fulfill type requirements
     const gasFeeEstimates = await fetchGasEstimatesViaEthFeeHistory(ethQuery);
 
     expect(gasFeeEstimates).toStrictEqual({

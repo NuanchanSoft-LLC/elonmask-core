@@ -40,14 +40,12 @@ describe('fetchBlockFeeHistory', () => {
 
     beforeEach(() => {
       when(mockedQuery)
-        // @ts-expect-error Mock eth query does not fulfill type requirements
         .calledWith(ethQuery, 'blockNumber')
         .mockResolvedValue(new BN(latestBlockNumber));
     });
 
     it('should return a representation of fee history from the Ethereum network, organized by block rather than type of data', async () => {
       when(mockedQuery)
-        // @ts-expect-error Mock eth query does not fulfill type requirements
         .calledWith(ethQuery, 'eth_feeHistory', [
           toHex(numberOfRequestedBlocks),
           toHex(latestBlockNumber),
@@ -97,7 +95,6 @@ describe('fetchBlockFeeHistory', () => {
 
     it('should be able to handle an "empty" response from eth_feeHistory', async () => {
       when(mockedQuery)
-        // @ts-expect-error Mock eth query does not fulfill type requirements
         .calledWith(ethQuery, 'eth_feeHistory', [
           toHex(numberOfRequestedBlocks),
           toHex(latestBlockNumber),
@@ -119,7 +116,6 @@ describe('fetchBlockFeeHistory', () => {
 
     it('should be able to handle an response with undefined baseFeePerGas from eth_feeHistory', async () => {
       when(mockedQuery)
-        // @ts-expect-error Mock eth query does not fulfill type requirements
         .calledWith(ethQuery, 'eth_feeHistory', [
           toHex(numberOfRequestedBlocks),
           toHex(latestBlockNumber),
@@ -157,7 +153,6 @@ describe('fetchBlockFeeHistory', () => {
       });
 
       when(mockedQuery)
-        // @ts-expect-error Mock eth query does not fulfill type requirements
         .calledWith(ethQuery, 'blockNumber')
         .mockResolvedValue(new BN(latestBlockNumber));
 
@@ -170,7 +165,6 @@ describe('fetchBlockFeeHistory', () => {
           .map((block) => block.gasUsedRatio);
 
         when(mockedQuery)
-          // @ts-expect-error Mock eth query does not fulfill type requirements
           .calledWith(ethQuery, 'eth_feeHistory', [
             toHex(endBlockNumber - startBlockNumber + 1),
             toHex(endBlockNumber),
@@ -207,7 +201,6 @@ describe('fetchBlockFeeHistory', () => {
       const numberOfRequestedBlocks = 3;
       const endBlock = new BN(latestBlockNumber);
       when(mockedQuery)
-        // @ts-expect-error Mock eth query does not fulfill type requirements
         .calledWith(ethQuery, 'eth_feeHistory', [
           toHex(numberOfRequestedBlocks),
           toHex(endBlock),
@@ -235,14 +228,12 @@ describe('fetchBlockFeeHistory', () => {
 
     beforeEach(() => {
       when(mockedQuery)
-        // @ts-expect-error Mock eth query does not fulfill type requirements
         .calledWith(ethQuery, 'blockNumber')
         .mockResolvedValue(new BN(latestBlockNumber));
     });
 
     it('should match each item in the "reward" key from the response to its percentile', async () => {
       when(mockedQuery)
-        // @ts-expect-error Mock eth query does not fulfill type requirements
         .calledWith(ethQuery, 'eth_feeHistory', [
           toHex(numberOfRequestedBlocks),
           toHex(latestBlockNumber),
@@ -318,7 +309,6 @@ describe('fetchBlockFeeHistory', () => {
 
     it('should be able to handle an "empty" response from eth_feeHistory including an empty "reward" array', async () => {
       when(mockedQuery)
-        // @ts-expect-error Mock eth query does not fulfill type requirements
         .calledWith(ethQuery, 'eth_feeHistory', [
           toHex(numberOfRequestedBlocks),
           toHex(latestBlockNumber),
@@ -347,7 +337,6 @@ describe('fetchBlockFeeHistory', () => {
 
     it('includes an extra block with an estimated baseFeePerGas', async () => {
       when(mockedQuery)
-        // @ts-expect-error Mock eth query does not fulfill type requirements
         .calledWith(ethQuery, 'eth_feeHistory', [
           toHex(numberOfRequestedBlocks),
           toHex(latestBlockNumber),
@@ -414,7 +403,6 @@ describe('fetchBlockFeeHistory', () => {
       const endBlock = new BN(latestBlockNumber);
 
       when(mockedQuery)
-        // @ts-expect-error Mock eth query does not fulfill type requirements
         .calledWith(ethQuery, 'eth_feeHistory', [
           toHex(latestBlockNumber),
           toHex(latestBlockNumber),

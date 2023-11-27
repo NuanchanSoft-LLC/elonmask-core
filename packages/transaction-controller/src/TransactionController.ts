@@ -271,7 +271,7 @@ export class TransactionController extends BaseController<
   TransactionConfig,
   TransactionState
 > {
-  private ethQuery: EthQuery;
+  private ethQuery: any;
 
   private nonceTracker: NonceTracker;
 

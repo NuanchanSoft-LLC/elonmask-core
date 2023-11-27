@@ -5,4 +5,10 @@ export type EthBlock = {
   baseFeePerGas: BN;
 };
 
+export type EthQuery = {
+  getBlockByNumber: (
+    blockNumber: BN | 'latest' | 'earliest' | 'pending',
+  ) => Promise<EthBlock>;
+};
+
 export type FeeRange = [string, string];

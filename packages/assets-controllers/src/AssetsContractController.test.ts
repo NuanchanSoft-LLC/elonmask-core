@@ -15,10 +15,8 @@ import {
 } from './AssetsContractController';
 import { SupportedTokenDetectionNetworks } from './assetsUtil';
 
-const INFURA_PROJECT_ID = '341eacb578dd44a1a049cbc5f6fd4035';
-
 const MAINNET_PROVIDER = new HttpProvider(
-  `https://mainnet.infura.io/v3/${INFURA_PROJECT_ID}`,
+  'https://mainnet.infura.io/v3/341eacb578dd44a1a049cbc5f6fd4035',
 );
 
 const ERC20_UNI_ADDRESS = '0x1f9840a85d5af5bf1d1762f925bdaddc4201f984';
@@ -39,7 +37,6 @@ const setupControllers = () => {
       allowedActions: [],
     });
   const network = new NetworkController({
-    infuraProjectId: INFURA_PROJECT_ID,
     messenger,
     trackMetaMetricsEvent: jest.fn(),
   });
@@ -301,7 +298,7 @@ describe('AssetsContractController', () => {
     );
     expect(balances[ERC20_DAI_ADDRESS]).not.toBeUndefined();
 
-    await network.setProviderType(NetworkType.sepolia);
+    await network.setProviderType(NetworkType.localhost);
 
     const noBalances = await assetsContract.getBalancesInSingleCall(
       ERC20_DAI_ADDRESS,

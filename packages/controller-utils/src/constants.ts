@@ -72,17 +72,15 @@ export const BUILT_IN_NETWORKS = {
       blockExplorerUrl: 'https://etherscan.io',
     },
   },
+  [NetworkType.localhost]: {
+    chainId: NetworksChainId.localhost,
+    blockExplorerUrl: undefined,
+    rpcPrefs: undefined,
+  },
   [NetworkType.rpc]: {
     chainId: undefined,
     blockExplorerUrl: undefined,
     rpcPrefs: undefined,
-  },
-  [NetworkType['elonchain-mainnet']]: {
-    chainId: NetworksChainId['elonchain-mainnet'],
-    ticker: NetworksTicker['elonchain-mainnet'],
-    rpcPrefs: {
-      blockExplorerUrl: 'https://scan.eloncoin.org',
-    },
   },
 } as const;
 

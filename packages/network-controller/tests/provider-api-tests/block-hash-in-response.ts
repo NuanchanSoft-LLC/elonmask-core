@@ -1,5 +1,7 @@
+/* eslint-disable no-loop-func */
 import {
   ProviderType,
+  waitForNextBlockTracker,
   withMockedCommunications,
   withNetworkClient,
 } from './helpers';
@@ -9,33 +11,18 @@ type TestsForRpcMethodThatCheckForBlockHashInResponseOptions = {
   numberOfParameters: number;
 };
 
-/**
- * Defines tests which exercise the behavior exhibited by an RPC method that
- * use `blockHash` in the response data to determine whether the response is
- * cacheable.
- *
- * @param method - The name of the RPC method under test.
- * @param additionalArgs - Additional arguments.
- * @param additionalArgs.numberOfParameters - The number of parameters supported
- * by the method under test.
- * @param additionalArgs.providerType - The type of provider being tested;
- * either `infura` or `custom`.
- */
-export function testsForRpcMethodsThatCheckForBlockHashInResponse(
+export const testsForRpcMethodsThatCheckForBlockHashInResponse = (
   method: string,
   {
-    numberOfParameters,
     providerType,
+    numberOfParameters,
   }: TestsForRpcMethodThatCheckForBlockHashInResponseOptions,
-) {
+) => {
   it('does not hit the RPC endpoint more than once for identical requests and it has a valid blockHash', async () => {
     const requests = [{ method }, { method }];
     const mockResult = { blockHash: '0x1' };
 
     await withMockedCommunications({ providerType }, async (comms) => {
-      // The first time a block-cacheable request is made, the latest block
-      // number is retrieved through the block tracker first. It doesn't
-      // matter what this is — it's just used as a cache key.
       comms.mockNextBlockTrackerRequest();
       comms.mockRpcCall({
         request: requests[0],
@@ -56,11 +43,6 @@ export function testsForRpcMethodsThatCheckForBlockHashInResponse(
     const mockResults = [{ blockHash: '0x100' }, { blockHash: '0x200' }];
 
     await withMockedCommunications({ providerType }, async (comms) => {
-      // Note that we have to mock these requests in a specific order. The
-      // first block tracker request occurs because of the first RPC
-      // request. The second block tracker request, however, does not occur
-      // because of the second RPC request, but rather because we call
-      // `clock.runAll()` below.
       comms.mockNextBlockTrackerRequest({ blockNumber: '0x1' });
       comms.mockRpcCall({
         request: requests[0],
@@ -76,10 +58,10 @@ export function testsForRpcMethodsThatCheckForBlockHashInResponse(
         { providerType },
         async (client) => {
           const firstResult = await client.makeRpcCall(requests[0]);
-          // Proceed to the next iteration of the block tracker so that a new
-          // block is fetched and the current block is updated.
-          client.clock.runAll();
+          await waitForNextBlockTracker(client.blockTracker, client.clock);
+
           const secondResult = await client.makeRpcCall(requests[1]);
+
           return [firstResult, secondResult];
         },
       );
@@ -104,36 +86,7 @@ export function testsForRpcMethodsThatCheckForBlockHashInResponse(
         request: requests[0],
         response: { result: mockResults[0] },
       });
-      comms.mockRpcCall({
-        request: requests[1],
-        response: { result: mockResults[1] },
-      });
 
-      const results = await withNetworkClient(
-        { providerType },
-        ({ makeRpcCallsInSeries }) => makeRpcCallsInSeries(requests),
-      );
-
-      expect(results).toStrictEqual(mockResults);
-    });
-  });
-
-  it('does not reuse the result of a previous request if result.blockHash was undefined', async () => {
-    const requests = [{ method }, { method }];
-    const mockResults = [
-      { extra: 'some value' },
-      { blockHash: '0x100', extra: 'some other value' },
-    ];
-
-    await withMockedCommunications({ providerType }, async (comms) => {
-      // The first time a block-cacheable request is made, the latest block
-      // number is retrieved through the block tracker first. It doesn't
-      // matter what this is — it's just used as a cache key.
-      comms.mockNextBlockTrackerRequest();
-      comms.mockRpcCall({
-        request: requests[0],
-        response: { result: mockResults[0] },
-      });
       comms.mockRpcCall({
         request: requests[1],
         response: { result: mockResults[1] },
@@ -168,6 +121,7 @@ export function testsForRpcMethodsThatCheckForBlockHashInResponse(
         request: requests[0],
         response: { result: mockResults[0] },
       });
+
       comms.mockRpcCall({
         request: requests[1],
         response: { result: mockResults[1] },
@@ -235,7 +189,7 @@ export function testsForRpcMethodsThatCheckForBlockHashInResponse(
   }
 
   for (const paramIndex of [...Array(numberOfParameters).keys()]) {
-    it(`does not reuse the result of a previous request with a valid blockHash if parameter at index "${paramIndex}" differs`, async () => {
+    it(`does not reuse the result of a previous request with a valid blockHash if parameter at index "${paramIndex}" differs`, async () => { // eslint-disable-line
       const firstMockParams = [
         ...new Array(numberOfParameters).fill('some value'),
       ];
@@ -259,6 +213,7 @@ export function testsForRpcMethodsThatCheckForBlockHashInResponse(
           request: requests[0],
           response: { result: mockResults[0] },
         });
+
         comms.mockRpcCall({
           request: requests[1],
           response: { result: mockResults[1] },
@@ -273,4 +228,4 @@ export function testsForRpcMethodsThatCheckForBlockHashInResponse(
       });
     });
   }
-}
+};

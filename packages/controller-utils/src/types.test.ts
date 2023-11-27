@@ -9,6 +9,7 @@ describe('types', () => {
     expect(isNetworkType(NetworkType.mainnet)).toBe(true);
     expect(isNetworkType(NetworkType.goerli)).toBe(true);
     expect(isNetworkType(NetworkType.sepolia)).toBe(true);
+    expect(isNetworkType(NetworkType.localhost)).toBe(true);
     expect(isNetworkType(NetworkType.rpc)).toBe(true);
   });
 });

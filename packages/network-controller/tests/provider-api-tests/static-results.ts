@@ -5,37 +5,34 @@ import {
   withNetworkClient,
 } from './helpers';
 
-type TestsForRpcMethodNotHandledByMiddlewareOptions = {
+type TestsForRpcMethodWithStaticResult = {
   providerType: ProviderType;
   numberOfParameters: number;
+  result: any;
 };
 
-export const testsForRpcMethodNotHandledByMiddleware = (
+export const testsForRpcMethodWithStaticResult = (
   method: string,
   {
     providerType,
     numberOfParameters,
-  }: TestsForRpcMethodNotHandledByMiddlewareOptions,
+    result,
+  }: TestsForRpcMethodWithStaticResult,
 ) => {
-  it('attempts to pass the request off to the RPC endpoint', async () => {
+  it('method is handled by middleware and the request is never sent to the network', async () => {
     const request = {
       method,
       params: fill(Array(numberOfParameters), 'some value'),
     };
-    const expectedResult = 'the result';
 
     await withMockedCommunications({ providerType }, async (comms) => {
       comms.mockNextBlockTrackerRequest({ blockNumber: '0x1' });
-      comms.mockRpcCall({
-        request,
-        response: { result: expectedResult },
-      });
       const actualResult = await withNetworkClient(
         { providerType },
         ({ makeRpcCall }) => makeRpcCall(request),
       );
 
-      expect(actualResult).toStrictEqual(expectedResult);
+      expect(actualResult).toStrictEqual(result);
     });
   });
 };

@@ -216,11 +216,7 @@ describe('TokenRatesController', () => {
   });
 
   it('should update all rates', async () => {
-    new NetworkController({
-      infuraProjectId: 'infura-project-id',
-      messenger,
-      trackMetaMetricsEvent: jest.fn(),
-    });
+    new NetworkController({ messenger, trackMetaMetricsEvent: jest.fn() });
     const preferences = new PreferencesController();
     const tokensController = new TokensController({
       onPreferencesStateChange: (listener) => preferences.subscribe(listener),

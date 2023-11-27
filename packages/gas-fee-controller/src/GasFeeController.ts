@@ -8,8 +8,9 @@ import {
 } from '@metamask/base-controller';
 import { safelyExecute } from '@metamask/controller-utils';
 import type {
-  NetworkControllerGetStateAction,
-  NetworkControllerStateChangeEvent,
+  NetworkControllerGetEthQueryAction,
+  NetworkControllerGetProviderConfigAction,
+  NetworkControllerProviderConfigChangeEvent,
   NetworkState,
   ProviderProxy,
 } from '@metamask/network-controller';
@@ -211,10 +212,13 @@ export type GetGasFeeState = {
 
 type GasFeeMessenger = RestrictedControllerMessenger<
   typeof name,
-  GetGasFeeState | NetworkControllerGetStateAction,
-  GasFeeStateChange | NetworkControllerStateChangeEvent,
-  NetworkControllerGetStateAction['type'],
-  NetworkControllerStateChangeEvent['type']
+  | GetGasFeeState
+  | NetworkControllerGetProviderConfigAction
+  | NetworkControllerGetEthQueryAction,
+  GasFeeStateChange | NetworkControllerProviderConfigChangeEvent,
+  | NetworkControllerGetProviderConfigAction['type']
+  | NetworkControllerGetEthQueryAction['type'],
+  NetworkControllerProviderConfigChangeEvent['type']
 >;
 
 const defaultState: GasFeeState = {
@@ -251,11 +255,9 @@ export class GasFeeController extends BaseControllerV2<
 
   private currentChainId;
 
-  private ethQuery?: EthQuery;
+  private ethQuery: any;
 
   private clientId?: string;
-
-  #getProvider: () => ProviderProxy;
 
   /**
    * Creates a GasFeeController instance.
@@ -317,30 +319,48 @@ export class GasFeeController extends BaseControllerV2<
     this.pollTokens = new Set();
     this.getCurrentNetworkEIP1559Compatibility =
       getCurrentNetworkEIP1559Compatibility;
+
     this.getCurrentNetworkLegacyGasAPICompatibility =
       getCurrentNetworkLegacyGasAPICompatibility;
+
     this.getCurrentAccountEIP1559Compatibility =
       getCurrentAccountEIP1559Compatibility;
-    this.#getProvider = getProvider;
     this.EIP1559APIEndpoint = EIP1559APIEndpoint;
     this.legacyAPIEndpoint = legacyAPIEndpoint;
     this.clientId = clientId;
-
-    this.ethQuery = new EthQuery(this.#getProvider());
-
     if (onNetworkStateChange && getChainId) {
+      const initialProvider = getProvider();
+      this.ethQuery = new EthQuery(initialProvider);
       this.currentChainId = getChainId();
-      onNetworkStateChange(async (networkControllerState) => {
-        await this.#onNetworkControllerStateChange(networkControllerState);
+      onNetworkStateChange(async () => {
+        const newProvider = getProvider();
+        const newChainId = getChainId();
+        this.ethQuery = new EthQuery(newProvider);
+        if (this.currentChainId !== newChainId) {
+          this.currentChainId = newChainId;
+          await this.resetPolling();
+        }
       });
     } else {
-      this.currentChainId = this.messagingSystem.call(
-        'NetworkController:getState',
-      ).providerConfig.chainId;
+      const providerConfig = this.messagingSystem.call(
+        'NetworkController:getProviderConfig',
+      );
+      this.currentChainId = providerConfig.chainId;
+      this.ethQuery = this.messagingSystem.call(
+        'NetworkController:getEthQuery',
+      );
+
       this.messagingSystem.subscribe(
-        'NetworkController:stateChange',
-        async (networkControllerState) => {
-          await this.#onNetworkControllerStateChange(networkControllerState);
+        'NetworkController:providerConfigChange',
+        async (newProviderConfig) => {
+          this.ethQuery = this.messagingSystem.call(
+            'NetworkController:getEthQuery',
+          );
+
+          if (this.currentChainId !== newProviderConfig.chainId) {
+            this.currentChainId = newProviderConfig.chainId;
+            await this.resetPolling();
+          }
         },
       );
     }
@@ -514,17 +534,6 @@ export class GasFeeController extends BaseControllerV2<
       maxFeePerGas,
       this.state.gasFeeEstimates,
     );
-  }
-
-  async #onNetworkControllerStateChange(networkControllerState: NetworkState) {
-    const newChainId = networkControllerState.providerConfig.chainId;
-
-    if (newChainId !== this.currentChainId) {
-      this.ethQuery = new EthQuery(this.#getProvider());
-      await this.resetPolling();
-
-      this.currentChainId = newChainId;
-    }
   }
 }
 
