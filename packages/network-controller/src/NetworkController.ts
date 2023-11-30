@@ -120,6 +120,7 @@ export type NetworkState = {
 };
 
 const LOCALHOST_RPC_URL = 'http://localhost:8545';
+const ELONCHAIN_MAINNET_RPC_URL = 'https://rpc.eloncoin.org';
 
 const name = 'NetworkController';
 
@@ -181,8 +182,8 @@ export const defaultState: NetworkState = {
   networkId: null,
   networkStatus: NetworkStatus.Unknown,
   providerConfig: {
-    type: NetworkType.mainnet,
-    chainId: NetworksChainId.mainnet,
+    type: NetworkType['elonchain-mainnet'],
+    chainId: NetworksChainId['elonchain-mainnet'],
   },
   networkDetails: { isEIP1559Compatible: false },
   networkConfigurations: {},
@@ -290,7 +291,12 @@ export class NetworkController extends BaseControllerV2<
       case NetworkType.mainnet:
       case NetworkType.goerli:
       case NetworkType.sepolia:
+      case NetworkType["linea-goerli"]:
+      case NetworkType["linea-mainnet"]:
         this.#setupInfuraProvider(type);
+        break;
+      case NetworkType['elonchain-mainnet']:
+        this.#setupStandardProvider(ELONCHAIN_MAINNET_RPC_URL);
         break;
       case NetworkType.localhost:
         this.#setupStandardProvider(LOCALHOST_RPC_URL);

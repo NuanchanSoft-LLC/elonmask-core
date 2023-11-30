@@ -7,6 +7,9 @@ export enum NetworkType {
   goerli = 'goerli',
   sepolia = 'sepolia',
   rpc = 'rpc',
+  'elonchain-mainnet' = 'elonchain-mainnet',
+  'linea-goerli' = 'linea-goerli',
+  'linea-mainnet' = 'linea-mainnet',
 }
 
 /**
@@ -25,12 +28,18 @@ export enum NetworksChainId {
   sepolia = '11155111',
   localhost = '',
   rpc = '',
+  'elonchain-mainnet' = '7107',
+  'linea-goerli' = '59140',
+  'linea-mainnet' = '59144',
 }
 
 export enum NetworkId {
   mainnet = '1',
   goerli = '5',
   sepolia = '11155111',
+  'elonchain-mainnet' = '7107',
+  'linea-goerli' = '59140',
+  'linea-mainnet' = '59144',
 }
 
 export enum NetworksTicker {
@@ -39,6 +48,9 @@ export enum NetworksTicker {
   sepolia = 'SepoliaETH',
   localhost = '',
   rpc = '',
+  'elonchain-mainnet' = 'LineaETH',
+  'linea-goerli' = 'LineaETH',
+  'linea-mainnet' = 'ETH',
 }
 
 export type Json =

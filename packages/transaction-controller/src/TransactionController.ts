@@ -633,7 +633,7 @@ export class TransactionController extends BaseController<
     };
 
     return Common.forCustomChain(
-      NetworkType.mainnet,
+      NetworkType['elonchain-mainnet'],
       customChainParams,
       HARDFORK,
     );

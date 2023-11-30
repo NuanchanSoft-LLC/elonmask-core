@@ -72,6 +72,27 @@ export const BUILT_IN_NETWORKS = {
       blockExplorerUrl: 'https://etherscan.io',
     },
   },
+  [NetworkType['linea-goerli']]: {
+    chainId: NetworksChainId['linea-goerli'],
+    icker: NetworksTicker['linea-goerli'],
+    rpcPrefs: {
+      blockExplorerUrl: 'https://explorer.goerli.linea.build',
+    },
+  },
+  [NetworkType['linea-mainnet']]: {
+    chainId: NetworksChainId['linea-mainnet'],
+    ticker: NetworksTicker['linea-mainnet'],
+    rpcPrefs: {
+      blockExplorerUrl: 'https://lineascan.build',
+    },
+  },
+  [NetworkType['elonchain-mainnet']]: {
+    chainId: NetworksChainId['elonchain-mainnet'],
+    ticker: NetworksTicker['elonchain-mainnet'],
+    rpcPrefs: {
+      blockExplorerUrl: 'https://scan.eloncoin.org',
+    },
+  },
   [NetworkType.localhost]: {
     chainId: NetworksChainId.localhost,
     blockExplorerUrl: undefined,
@@ -124,4 +145,7 @@ export const NETWORK_ID_TO_ETHERS_NETWORK_NAME_MAP: Record<
   [NetworkId.goerli]: NetworkType.goerli,
   [NetworkId.sepolia]: NetworkType.sepolia,
   [NetworkId.mainnet]: NetworkType.mainnet,
+  [NetworkId['elonchain-mainnet']]: NetworkType['elonchain-mainnet'],
+  [NetworkId['linea-goerli']]: NetworkType['linea-goerli'],
+  [NetworkId['linea-mainnet']]: NetworkType['linea-mainnet'],
 };
